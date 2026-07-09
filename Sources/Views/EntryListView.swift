@@ -8,6 +8,7 @@ struct EntryListView: View {
     @Query(sort: \JournalEntry.createdAt, order: .reverse) private var entries: [JournalEntry]
     @State private var path: [JournalEntry] = []
     @State private var showingStylePicker = false
+    @State private var creatingFormat: JournalFormat?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -28,6 +29,9 @@ struct EntryListView: View {
             .sheet(isPresented: $showingStylePicker) {
                 StylePickerView(onPick: newEntry)
             }
+            .sheet(item: $creatingFormat) { format in
+                ComingSoonEditor(format: format)
+            }
         }
     }
 
@@ -39,6 +43,14 @@ struct EntryListView: View {
                     onStart: startDailyJournal,
                     onPick: startDailyJournal(with:)
                 )
+            }
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+
+            Section {
+                FormatGallery(onSelect: { creatingFormat = $0 })
+            } header: {
+                Text("More ways to journal")
             }
             .listRowInsets(EdgeInsets())
             .listRowBackground(Color.clear)
