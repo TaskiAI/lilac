@@ -40,12 +40,18 @@ private struct FormatTile: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
-            Text("Soon")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(Color.lilac)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Color.lilac.opacity(0.12), in: Capsule())
+            if format.isAvailable {
+                Image(systemName: "arrow.up.right")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(Color.lilac)
+            } else {
+                Text("Soon")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Color.lilac)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.lilac.opacity(0.12), in: Capsule())
+            }
         }
         .frame(width: 136, height: 156, alignment: .topLeading)
         .padding(14)

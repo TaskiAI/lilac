@@ -45,4 +45,13 @@ enum JournalFormat: String, CaseIterable, Identifiable {
         case .log: return "slider.horizontal.3"
         }
     }
+
+    /// Whether the format has a real editor yet. Live formats open an entry; the
+    /// rest present `ComingSoonEditor`.
+    var isAvailable: Bool {
+        switch self {
+        case .photo, .drawing, .diagram: return true
+        case .audio, .log: return false
+        }
+    }
 }

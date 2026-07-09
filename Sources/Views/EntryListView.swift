@@ -24,7 +24,14 @@ struct EntryListView: View {
                 }
             }
             .navigationDestination(for: JournalEntry.self) { entry in
-                EntryEditorView(entry: entry)
+                switch entry.format {
+                case .drawing?, .diagram?:
+                    DrawingJournalView(entry: entry)
+                case .photo?:
+                    PictureJournalView(entry: entry)
+                default:
+                    EntryEditorView(entry: entry)
+                }
             }
             .sheet(isPresented: $showingStylePicker) {
                 StylePickerView(onPick: newEntry)
@@ -48,7 +55,7 @@ struct EntryListView: View {
             .listRowBackground(Color.clear)
 
             Section {
-                FormatGallery(onSelect: { creatingFormat = $0 })
+                FormatGallery(onSelect: startFormat)
             } header: {
                 Text("More ways to journal")
             }
@@ -107,6 +114,19 @@ struct EntryListView: View {
     /// check-in, seeded instantly then upgraded to a generated prompt.
     private func startDailyJournal() {
         newEntry(style: .freeFlow, sessionLength: .quick)
+    }
+
+    /// Create-gallery routing: the drawing formats open a real entry in the
+    /// sketch editor; the rest still show their `ComingSoonEditor` placeholder.
+    private func startFormat(_ format: JournalFormat) {
+        switch format {
+        case .drawing, .diagram, .photo:
+            let entry = JournalEntry(prompt: "", format: format)
+            context.insert(entry)
+            path.append(entry)
+        case .audio, .log:
+            creatingFormat = format
+        }
     }
 
     /// Start a journal from a chosen recommended prompt. Uses the prompt exactly
@@ -230,12 +250,12 @@ private struct EntryRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            Image(systemName: entry.style.icon)
+            Image(systemName: entry.format?.icon ?? entry.style.icon)
                 .font(.subheadline)
                 .foregroundStyle(Color.lilac)
                 .frame(width: 20)
             VStack(alignment: .leading, spacing: 4) {
-                Text(entry.prompt)
+                Text(entry.prompt.isEmpty ? (entry.format?.title ?? "Untitled") : entry.prompt)
                     .font(.body.weight(.medium))
                     .lineLimit(2)
                 Text(entry.createdAt.formatted(date: .abbreviated, time: .shortened))

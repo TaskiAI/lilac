@@ -42,7 +42,11 @@ This is the modular base every journaling type builds on — keep type-specific 
   - Line spacing is local `@State` seeded from `theme.defaultSpacing`; it is **not** persisted per entry yet.
 - `Journal/JournalTheme.swift` — `JournalTheme` value type bundling `paper`/`ink`/`rule`/`margin` colors + `spacingRange`/`defaultSpacing`. Add a new `static let` here to define a new mode's look.
 - `Journal/RuledPaper.swift` — draws the faint rules + left margin with SwiftUI `Canvas`, parameterized by `spacing` and colors. Purely decorative (`allowsHitTesting(false)`).
-- `Journal/DrawingCanvas.swift` — `UIViewRepresentable` wrapper over `PKCanvasView`; the PencilKit ↔ SwiftUI bridge. Fixed fountain-pen ink (color passed in), no floating tool picker, scrolling disabled so rules and ink stay aligned.
+- `Journal/DrawingCanvas.swift` — `UIViewRepresentable` wrapper over `PKCanvasView` for the **writing** page: fixed fountain-pen ink (color passed in), no floating tool picker, hosts the ruled background inside its scroll content, auto-grows.
+- `Journal/SketchCanvas.swift` — the free-drawing counterpart for the **drawing/diagram** formats: shows the full `PKToolPicker` (pens, eraser, colors), scrolls + auto-grows, and renders an optional dot grid (`GridBackgroundView`) behind the ink. Used by `Views/DrawingJournalView.swift` (blank paper for `.drawing`, dot grid for `.diagram`). Persistence is identical to writing — the drawing is `entry.drawingData`, autosaved via `onChange`; `updateUIView` never writes `canvas.drawing`.
+- `Journal/RuledBackgroundView.swift` / `Journal/GridBackgroundView.swift` — non-interactive UIKit backgrounds (ruled lines / dot grid) drawn inside the respective canvas's scroll content so they stay locked to the ink.
+
+`Models/JournalFormat.swift` enumerates the non-writing formats surfaced in the home-screen "Create" gallery (`Views/CreateJournalView.swift`), with an `isAvailable` flag. Live formats are `.drawing`/`.diagram` (→ `DrawingJournalView`) and `.photo` (→ `Views/PictureJournalView.swift`, a drag/pinch photo collage), routed via `JournalEntry.format`; `.audio`/`.log` still present `ComingSoonEditor`. Photos persist on the entry: `backgroundImageData` (a single annotate-over photo behind the ink in a drawing/diagram — see `SketchCanvas.backgroundImage`) and `collageData` (JSON-encoded `[CollageItem]`, exposed via `JournalEntry.collageItems`). Imported photos are downscaled + JPEG-encoded via `UIImage.journalEncoded` (`Journal/PhotoSupport.swift`).
 
 ## Design system (diary aesthetic)
 
