@@ -28,6 +28,14 @@ final class JournalEntry {
     /// and read/written through `collageItems`; nil for every other format.
     private var collageData: Data?
 
+    /// Typed body text — the transcription plus anything written afterward in an
+    /// Audio entry. Optional so pre-existing rows migrate cleanly.
+    var text: String?
+
+    /// The recorded voice notes of an Audio entry, JSON-encoded. Read/written
+    /// through `audioClips`; nil for every other format.
+    private var audioClipsData: Data?
+
     var style: JournalStyle {
         get { styleRawValue.flatMap(JournalStyle.init(rawValue:)) ?? .freeFlow }
         set { styleRawValue = newValue.rawValue }
@@ -52,6 +60,12 @@ final class JournalEntry {
         set { collageData = try? JSONEncoder().encode(newValue) }
     }
 
+    /// The recorded voice notes of an Audio entry. Decodes/encodes `audioClipsData`.
+    var audioClips: [AudioClip] {
+        get { audioClipsData.flatMap { try? JSONDecoder().decode([AudioClip].self, from: $0) } ?? [] }
+        set { audioClipsData = try? JSONEncoder().encode(newValue) }
+    }
+
     init(
         createdAt: Date = .now,
         prompt: String,
@@ -59,7 +73,8 @@ final class JournalEntry {
         style: JournalStyle = .freeFlow,
         sessionLength: SessionLength = .quick,
         format: JournalFormat? = nil,
-        backgroundImageData: Data? = nil
+        backgroundImageData: Data? = nil,
+        text: String? = nil
     ) {
         self.createdAt = createdAt
         self.prompt = prompt
@@ -69,5 +84,7 @@ final class JournalEntry {
         self.formatRawValue = format?.rawValue
         self.backgroundImageData = backgroundImageData
         self.collageData = nil
+        self.text = text
+        self.audioClipsData = nil
     }
 }

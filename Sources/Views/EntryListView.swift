@@ -29,6 +29,8 @@ struct EntryListView: View {
                     DrawingJournalView(entry: entry)
                 case .photo?:
                     PictureJournalView(entry: entry)
+                case .audio?:
+                    AudioJournalView(entry: entry)
                 default:
                     EntryEditorView(entry: entry)
                 }
@@ -120,11 +122,11 @@ struct EntryListView: View {
     /// sketch editor; the rest still show their `ComingSoonEditor` placeholder.
     private func startFormat(_ format: JournalFormat) {
         switch format {
-        case .drawing, .diagram, .photo:
+        case .drawing, .diagram, .photo, .audio:
             let entry = JournalEntry(prompt: "", format: format)
             context.insert(entry)
             path.append(entry)
-        case .audio, .log:
+        case .log:
             creatingFormat = format
         }
     }
@@ -248,6 +250,14 @@ private struct EntryRow: View {
         return drawing.image(from: drawing.bounds, scale: 1)
     }
 
+    /// Prefer the prompt, then any written/transcribed text, then the format's
+    /// name — so audio and picture entries read as more than just "Audio".
+    private var title: String {
+        if !entry.prompt.isEmpty { return entry.prompt }
+        if let text = entry.text, !text.isEmpty { return text }
+        return entry.format?.title ?? "Untitled"
+    }
+
     var body: some View {
         HStack(spacing: 14) {
             Image(systemName: entry.format?.icon ?? entry.style.icon)
@@ -255,7 +265,7 @@ private struct EntryRow: View {
                 .foregroundStyle(Color.lilac)
                 .frame(width: 20)
             VStack(alignment: .leading, spacing: 4) {
-                Text(entry.prompt.isEmpty ? (entry.format?.title ?? "Untitled") : entry.prompt)
+                Text(title)
                     .font(.body.weight(.medium))
                     .lineLimit(2)
                 Text(entry.createdAt.formatted(date: .abbreviated, time: .shortened))

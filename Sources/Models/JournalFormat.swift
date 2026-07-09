@@ -50,8 +50,8 @@ enum JournalFormat: String, CaseIterable, Identifiable {
     /// rest present `ComingSoonEditor`.
     var isAvailable: Bool {
         switch self {
-        case .photo, .drawing, .diagram: return true
-        case .audio, .log: return false
+        case .photo, .drawing, .diagram, .audio: return true
+        case .log: return false
         }
     }
 }

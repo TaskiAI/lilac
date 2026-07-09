@@ -22,6 +22,9 @@ targets:
         # environment (env var / xcconfig) so it is never committed; unset
         # bakes in an empty value and the app runs offline on PromptBank.
         INFOPLIST_KEY_DEEPSEEK_API_KEY: "$(DEEPSEEK_API_KEY)"
+        # Audio journaling: record voice notes and transcribe them to text.
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Lilac records your spoken journal entries."
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Lilac transcribes your recordings into text you can edit."
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
