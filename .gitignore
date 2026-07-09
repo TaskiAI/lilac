@@ -1,0 +1,29 @@
+# macOS
+.DS_Store
+
+# Xcode — user-specific state (per-developer, never share)
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad
+
+# Xcode build output & derived data
+build/
+DerivedData/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# CocoaPods / Carthage (unused now, but harmless to ignore)
+Pods/
+Carthage/Build/
+
+# XcodeGen — the .xcodeproj is generated from project.yml.
+# It's currently committed; if you decide to stop tracking it, uncomment:
+# Lilac.xcodeproj/
