@@ -18,6 +18,10 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_VERSION: "5.0"
         INFOPLIST_KEY_CFBundleDisplayName: Lilac
+        # DeepSeek key for the AI prompt engine. Resolved from the build
+        # environment (env var / xcconfig) so it is never committed; unset
+        # bakes in an empty value and the app runs offline on PromptBank.
+        INFOPLIST_KEY_DEEPSEEK_API_KEY: "$(DEEPSEEK_API_KEY)"
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"

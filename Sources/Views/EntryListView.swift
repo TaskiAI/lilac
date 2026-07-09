@@ -86,14 +86,23 @@ struct EntryListView: View {
     }
 
     private func newEntry(style: JournalStyle, sessionLength: SessionLength) {
+        // Seed instantly from the curated bank so navigation never waits on the
+        // network, then upgrade to a freshly generated prompt in the background.
+        // If the engine is offline the seed simply stays.
+        let seeded = PromptBank.random(for: style)
         let entry = JournalEntry(
-            prompt: PromptBank.random(for: style),
+            prompt: seeded,
             style: style,
             sessionLength: sessionLength
         )
         context.insert(entry)
         showingStylePicker = false
         path.append(entry)
+
+        Task { @MainActor in
+            let generated = await PromptEngine.shared.prompt(for: style, excluding: seeded)
+            entry.prompt = generated
+        }
     }
 
     private func delete(at offsets: IndexSet) {
