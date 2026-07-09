@@ -11,13 +11,7 @@ struct EntryListView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            Group {
-                if entries.isEmpty {
-                    emptyState
-                } else {
-                    list
-                }
-            }
+            list
             .navigationTitle("Lilac")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -39,6 +33,16 @@ struct EntryListView: View {
 
     private var list: some View {
         List {
+            Section {
+                DailyJournalCard(
+                    recommended: RecommendedPrompts.today(),
+                    onStart: startDailyJournal,
+                    onPick: startDailyJournal(with:)
+                )
+            }
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+
             if let onThisDay = onThisDayEntry {
                 Section {
                     NavigationLink(value: onThisDay) {
@@ -48,12 +52,26 @@ struct EntryListView: View {
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
             }
-            ForEach(entries) { entry in
-                NavigationLink(value: entry) {
-                    EntryRow(entry: entry)
+
+            if entries.isEmpty {
+                Section {
+                    Text("Your entries will appear here.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 12)
+                }
+                .listRowBackground(Color.clear)
+            } else {
+                Section("Entries") {
+                    ForEach(entries) { entry in
+                        NavigationLink(value: entry) {
+                            EntryRow(entry: entry)
+                        }
+                    }
+                    .onDelete(perform: delete)
                 }
             }
-            .onDelete(perform: delete)
         }
         .listStyle(.insetGrouped)
     }
@@ -73,16 +91,22 @@ struct EntryListView: View {
         return nil
     }
 
-    private var emptyState: some View {
-        ContentUnavailableView {
-            Label("Start journaling", systemImage: "leaf")
-                .foregroundStyle(Color.lilac)
-        } description: {
-            Text("Tap the pencil to open your first prompt.")
-        } actions: {
-            Button("New Entry") { showingStylePicker = true }
-                .buttonStyle(.borderedProminent)
-        }
+    /// The daily reminder's primary action: start today's journal as a free-flow
+    /// check-in, seeded instantly then upgraded to a generated prompt.
+    private func startDailyJournal() {
+        newEntry(style: .freeFlow, sessionLength: .quick)
+    }
+
+    /// Start a journal from a chosen recommended prompt. Uses the prompt exactly
+    /// as picked — no AI upgrade — since the writer selected this one on purpose.
+    private func startDailyJournal(with recommended: RecommendedPrompt) {
+        let entry = JournalEntry(
+            prompt: recommended.text,
+            style: recommended.style,
+            sessionLength: .quick
+        )
+        context.insert(entry)
+        path.append(entry)
     }
 
     private func newEntry(style: JournalStyle, sessionLength: SessionLength) {
@@ -109,6 +133,76 @@ struct EntryListView: View {
         for index in offsets {
             context.delete(entries[index])
         }
+    }
+}
+
+/// The home screen's hero: a standing reminder to journal today. Tapping the
+/// body starts today's entry; the dropdown offers recommended prompts to start
+/// from instead. The recommendations are curated for now and will later be
+/// driven by therapy sessions and other AI analyzers.
+private struct DailyJournalCard: View {
+    let recommended: [RecommendedPrompt]
+    let onStart: () -> Void
+    let onPick: (RecommendedPrompt) -> Void
+
+    private var today: String {
+        Date().formatted(.dateTime.weekday(.wide).month().day())
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button(action: onStart) {
+                HStack(spacing: 14) {
+                    Image(systemName: "leaf")
+                        .font(.title2)
+                        .foregroundStyle(Color.lilac)
+                        .frame(width: 28)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Daily journal")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        Text(today)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "square.and.pencil")
+                        .font(.title3)
+                        .foregroundStyle(Color.lilac)
+                }
+                .padding(16)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if !recommended.isEmpty {
+                Divider().overlay(Color.lilac.opacity(0.25))
+
+                Menu {
+                    ForEach(recommended) { prompt in
+                        Button {
+                            onPick(prompt)
+                        } label: {
+                            Label(prompt.text, systemImage: prompt.style.icon)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "sparkles")
+                        Text("Recommended prompts")
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.down")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Color.lilac)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                }
+            }
+        }
+        .background(Color.lilacSoft, in: RoundedRectangle(cornerRadius: 16))
     }
 }
 
