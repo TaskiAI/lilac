@@ -1,11 +1,13 @@
 import SwiftUI
 import PencilKit
 
-/// A PencilKit canvas wrapped for SwiftUI. Accepts Apple Pencil, finger, and
-/// pointer input (so it works in the simulator). Reports every stroke change
-/// back through `onChange` for autosave.
+/// A PencilKit canvas wrapped for SwiftUI. A fixed fountain-pen ink tool, no
+/// floating tool picker — the page should feel like paper, not an editor.
+/// Accepts Apple Pencil, finger, and pointer input (so it works in the
+/// simulator). Reports every stroke change back through `onChange` for autosave.
 struct DrawingCanvas: UIViewRepresentable {
     let initialDrawing: PKDrawing
+    var ink: UIColor
     let onChange: (PKDrawing) -> Void
 
     func makeUIView(context: Context) -> PKCanvasView {
@@ -13,15 +15,9 @@ struct DrawingCanvas: UIViewRepresentable {
         canvas.drawing = initialDrawing
         canvas.delegate = context.coordinator
         canvas.drawingPolicy = .anyInput
-        canvas.alwaysBounceVertical = true
+        canvas.isScrollEnabled = false
         canvas.backgroundColor = .clear
-
-        let picker = context.coordinator.toolPicker
-        picker.setVisible(true, forFirstResponder: canvas)
-        picker.addObserver(canvas)
-        DispatchQueue.main.async {
-            canvas.becomeFirstResponder()
-        }
+        canvas.tool = PKInkingTool(.fountainPen, color: ink, width: 3)
         return canvas
     }
 
@@ -35,7 +31,6 @@ struct DrawingCanvas: UIViewRepresentable {
     }
 
     final class Coordinator: NSObject, PKCanvasViewDelegate {
-        let toolPicker = PKToolPicker()
         let onChange: (PKDrawing) -> Void
 
         init(onChange: @escaping (PKDrawing) -> Void) {

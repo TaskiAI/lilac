@@ -1,0 +1,59 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+Lilac is an iOS journaling app. Entries are **handwritten** (Apple Pencil / finger) on a ruled, aged-paper page, not typed text. The current mode is a free-form diary; prompted / typed journaling modes will be built on the same reusable page. Built with SwiftUI + SwiftData + PencilKit, iOS 17+.
+
+## Project generation & build
+
+The Xcode project (`Lilac.xcodeproj`) is **generated** from `project.yml` by [XcodeGen](https://github.com/yonaskolb/XcodeGen) — treat the `.xcodeproj` as a build artifact. Edit `project.yml` for any target/setting/bundle-id changes, then regenerate; do not hand-edit `project.pbxproj`.
+
+```sh
+xcodegen generate                                    # regenerate .xcodeproj after changing project.yml or adding files
+xcodebuild -project Lilac.xcodeproj -scheme Lilac \
+  -destination 'platform=iOS Simulator,name=iPhone 17' build   # use any installed simulator (xcrun simctl list devices available)
+```
+
+New Swift files under `Sources/` are picked up automatically on the next `xcodegen generate` (the target sources the whole `Sources` directory) — no need to register files manually.
+
+There is no test target and no lint config in the repo yet.
+
+## Architecture
+
+Single-window SwiftUI app. Data flows through SwiftData; there is no separate view-model layer.
+
+- `LilacApp.swift` — `@main`; installs the `.modelContainer(for: JournalEntry.self)` and global `.lilac` tint.
+- `Models/JournalEntry.swift` — the only `@Model`. A drawing is persisted as `drawingData: Data`, the serialized `PKDrawing.dataRepresentation()`. There is no separate image storage; thumbnails are rendered on demand.
+- `Views/EntryListView.swift` — home screen. Uses `@Query` for the reverse-chronological feed and drives navigation with a `NavigationStack(path:)`. New entries are inserted into the context and pushed onto the path in one step. `EntryRow` renders a live thumbnail by decoding `drawingData` back into a `PKDrawing`.
+- `Views/EntryEditorView.swift` — a **concrete screen**, not the surface itself: the free-form diary, which is just `JournalPage(entry:)` with no accessory. New journaling modes are new thin screens like this one.
+- `Prompts/PromptBank.swift` — a hardcoded list of curated prompts with `random(excluding:)`. Intentionally offline; slated to be replaced by an AI-generated prompt engine in a later version.
+- `Theme.swift` — color tokens: the diary palette (below) plus the legacy `Color.lilac` / `Color.lilacSoft`.
+
+### The reusable journaling engine (`Sources/Journal/`)
+
+This is the modular base every journaling type builds on — keep type-specific logic **out** of it.
+
+- `Journal/JournalPage.swift` — `JournalPage<Accessory: View>`, the whole writing surface: date header → optional `accessory` slot → ruled page + canvas → spacing slider. The **extension points** are the two initializer parameters:
+  - `accessory:` — a `@ViewBuilder` slot rendered under the date. A prompted mode passes a prompt banner here; the free diary passes nothing (defaults to `EmptyView`).
+  - `theme:` — a `JournalTheme` (defaults to `.diary`) so a mode can restyle paper/ink/rules/spacing without touching the page.
+  - Line spacing is local `@State` seeded from `theme.defaultSpacing`; it is **not** persisted per entry yet.
+- `Journal/JournalTheme.swift` — `JournalTheme` value type bundling `paper`/`ink`/`rule`/`margin` colors + `spacingRange`/`defaultSpacing`. Add a new `static let` here to define a new mode's look.
+- `Journal/RuledPaper.swift` — draws the faint rules + left margin with SwiftUI `Canvas`, parameterized by `spacing` and colors. Purely decorative (`allowsHitTesting(false)`).
+- `Journal/DrawingCanvas.swift` — `UIViewRepresentable` wrapper over `PKCanvasView`; the PencilKit ↔ SwiftUI bridge. Fixed fountain-pen ink (color passed in), no floating tool picker, scrolling disabled so rules and ink stay aligned.
+
+## Design system (diary aesthetic)
+
+The look is a **warm, deliberate aged-paper diary** — serif type, no tech/AI/startup colors or vocabulary. Preserve this direction; when adding UI, pull from the tokens rather than inventing new colors or fonts.
+
+- **Color** (`Theme.swift`): `paper` warm ivory `#F6EFE0` (the page), `ink` warm near-black `#332B24` (writing + primary text), `rule` faint sepia (ruled lines/hairlines), `margin` dried lilac (left margin + accent/slider tint — ties to the app name while staying warm). Route new surfaces through a `JournalTheme` instead of hardcoding.
+- **Type:** system **serif** (New York) for all chrome — `.font(.system(.largeTitle, design: .serif))` for the hero weekday, italic serif for the date line. Keep serif; avoid the default SF sans for user-facing journal text.
+- **Layout:** date anchored top-left as the page's hero; quiet controls docked behind hairline (`rule`) dividers; generous padding (24pt horizontal). Chrome stays understated so the page reads as paper, not an editor.
+
+### Key conventions worth preserving
+
+- **Autosave via closure, not binding.** `DrawingCanvas` reports strokes through an `onChange: (PKDrawing) -> Void` callback; the editor writes the encoded data straight into the `@Model`, so SwiftData persists every stroke. There is no explicit "save" action.
+- **`DrawingCanvas.updateUIView` is deliberately empty.** Never push the SwiftUI drawing state back into the live `PKCanvasView` — it would clobber in-progress strokes. The initial drawing is set once in `makeUIView`.
+- **`drawingPolicy = .anyInput`** so the canvas works with finger/pointer in the Simulator, not just Apple Pencil.
+- Drawings are the source of truth for entry content; when reading/rendering an entry, decode `drawingData` with `try? PKDrawing(data:)` and treat an empty/failed decode as a blank `PKDrawing()`.
