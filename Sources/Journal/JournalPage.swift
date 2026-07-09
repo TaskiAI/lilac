@@ -6,6 +6,10 @@ import PencilKit
 /// date, an optional `accessory` (a prompt, a mood, anything a type adds above
 /// the page), a ruled page you write on, and a slider that tightens the lines.
 ///
+/// The page scrolls: it grows as you write to the bottom (one finger draws, two
+/// fingers scroll), the header scrolls away with the page, and the spacing
+/// slider stays docked.
+///
 /// The free-form diary is just `JournalPage(entry:)`. A future prompted type
 /// passes an `accessory` — and its own `theme` if it wants a different look:
 ///
@@ -18,6 +22,8 @@ struct JournalPage<Accessory: View>: View {
     @ViewBuilder var accessory: () -> Accessory
 
     @State private var lineSpacing: CGFloat
+    @State private var headerHeight: CGFloat = 0
+    @State private var scrollOffset: CGFloat = 0
 
     init(
         entry: JournalEntry,
@@ -34,15 +40,30 @@ struct JournalPage<Accessory: View>: View {
         (try? PKDrawing(data: entry.drawingData)) ?? PKDrawing()
     }
 
+    /// Header translation: 0 at rest (canvas is inset by the header height),
+    /// sliding up to `-headerHeight` as the page scrolls. Clamped so it never
+    /// drifts down past the top during rubber-band overscroll.
+    private var headerTranslation: CGFloat {
+        min(0, -(scrollOffset + headerHeight))
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            header
+            ZStack(alignment: .top) {
+                DrawingCanvas(
+                    initialDrawing: loadedDrawing,
+                    ink: UIColor(theme.ink),
+                    spacing: lineSpacing,
+                    rule: UIColor(theme.rule),
+                    margin: UIColor(theme.margin),
+                    topInset: headerHeight,
+                    onChange: { entry.drawingData = $0.dataRepresentation() },
+                    onScroll: { scrollOffset = $0 }
+                )
 
-            ZStack {
-                RuledPaper(spacing: lineSpacing, rule: theme.rule, margin: theme.margin)
-                DrawingCanvas(initialDrawing: loadedDrawing, ink: UIColor(theme.ink)) { drawing in
-                    entry.drawingData = drawing.dataRepresentation()
-                }
+                header
+                    .background(theme.paper)
+                    .offset(y: headerTranslation)
             }
 
             spacingControl
@@ -70,6 +91,12 @@ struct JournalPage<Accessory: View>: View {
         .padding(.horizontal, 24)
         .padding(.top, 8)
         .padding(.bottom, 18)
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: HeaderHeightKey.self, value: proxy.size.height)
+            }
+        )
+        .onPreferenceChange(HeaderHeightKey.self) { headerHeight = $0 }
     }
 
     private var spacingControl: some View {
@@ -89,5 +116,14 @@ struct JournalPage<Accessory: View>: View {
         .overlay(alignment: .top) {
             Rectangle().fill(theme.rule).frame(height: 0.75)
         }
+    }
+}
+
+/// Carries the measured header height up so the canvas can reserve that much
+/// top inset and the header can be translated as the page scrolls.
+private struct HeaderHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
