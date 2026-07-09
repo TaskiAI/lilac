@@ -15,6 +15,8 @@
 		906FD68914896BC843F75543 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A5C7FB54BCBA0B58CA1716 /* Theme.swift */; };
 		97363060B6622CD808E29A72 /* LilacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 531180A415B87E8992731898 /* LilacApp.swift */; };
 		C4F854DD118447783CF05C46 /* JournalEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C17E63CFB02B2F508439C50 /* JournalEntry.swift */; };
+		F1DF1474E9DEAE7F8C21EC2C /* JournalStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B8502F8CA265F89738E3376 /* JournalStyle.swift */; };
+		9303CC84E05DB8FD5868D72B /* StylePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D73852397D9DC902D615D6 /* StylePickerView.swift */; };
 		FD735B651F662BD75F38D574 /* EntryEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F2F9491E4FA2CBD70543478 /* EntryEditorView.swift */; };
 		FE70EADE237B0571ED015F36 /* RuledPaper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 744C0DE76A780609CAADD0FE /* RuledPaper.swift */; };
 /* End PBXBuildFile section */
@@ -27,6 +29,8 @@
 		531180A415B87E8992731898 /* LilacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LilacApp.swift; sourceTree = "<group>"; };
 		6C17E63CFB02B2F508439C50 /* JournalEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalEntry.swift; sourceTree = "<group>"; };
 		744C0DE76A780609CAADD0FE /* RuledPaper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuledPaper.swift; sourceTree = "<group>"; };
+		2B8502F8CA265F89738E3376 /* JournalStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalStyle.swift; sourceTree = "<group>"; };
+		B2D73852397D9DC902D615D6 /* StylePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylePickerView.swift; sourceTree = "<group>"; };
 		7F2F9491E4FA2CBD70543478 /* EntryEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryEditorView.swift; sourceTree = "<group>"; };
 		9552F31413FD2A3F192259C6 /* JournalTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalTheme.swift; sourceTree = "<group>"; };
 		D15BF6A3A678CACE90CC6C92 /* DrawingCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawingCanvas.swift; sourceTree = "<group>"; };
@@ -86,6 +90,7 @@
 			isa = PBXGroup;
 			children = (
 				6C17E63CFB02B2F508439C50 /* JournalEntry.swift */,
+				2B8502F8CA265F89738E3376 /* JournalStyle.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -95,6 +100,7 @@
 			children = (
 				7F2F9491E4FA2CBD70543478 /* EntryEditorView.swift */,
 				F63C2F6C6A885D830287DC81 /* EntryListView.swift */,
+				B2D73852397D9DC902D615D6 /* StylePickerView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -159,10 +165,12 @@
 				550E654FEFC7F4D6F6BC255B /* EntryListView.swift in Sources */,
 				C4F854DD118447783CF05C46 /* JournalEntry.swift in Sources */,
 				316B11FF911567BC3201035A /* JournalPage.swift in Sources */,
+				F1DF1474E9DEAE7F8C21EC2C /* JournalStyle.swift in Sources */,
 				68DB1AE7DDE41DFE9A88AA79 /* JournalTheme.swift in Sources */,
 				97363060B6622CD808E29A72 /* LilacApp.swift in Sources */,
 				2E441EC8D091239A18293AA3 /* PromptBank.swift in Sources */,
 				FE70EADE237B0571ED015F36 /* RuledPaper.swift in Sources */,
+				9303CC84E05DB8FD5868D72B /* StylePickerView.swift in Sources */,
 				906FD68914896BC843F75543 /* Theme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
