@@ -48,6 +48,18 @@ An AI-integrated "Activities" feature that resurfaces past entries to help users
 - **Views** (`Sources/Views/Rewind/`): `RewindCard`, `ThenNowView`, `ThreadRevisitBrowser` (incl. confirmation-gated "hardest weeks"), `RewindSettingsPanel`; `RewindActivitySection` is embedded in `EntryListView`'s "Activities" section. Uses the lilac home-screen palette.
 - **Privacy:** Rewind (and its DeepSeek calls) sends entry text off-device; gated on `RewindSettings.enabled` (defaults on).
 
+### The Sessions feature — therapist-session assistant (`Sources/Sessions/` + `Sources/Views/Sessions/`)
+
+The **Sessions** tab (was a companion+meetings hub) is a recorder/recall tool for therapy sessions: record → diarized transcript (who said what) → AI summary → transcript-grounded Q&A. `EntryListView`'s `.sessions` tab now shows `SessionsView`.
+
+- **Model:** `TherapySession` (`Models/TherapySession.swift`) — one `@Model` covering both a **scheduled** future session (calendar) and a **recorded** one. Audio is stored **on disk** (`SessionAudioStore`, Application Support) not inline — sessions run long; the model keeps only `audioFilename`. Diarized utterances (`SessionSegment`), the per-session Q&A (`SessionChatMessage`), and lifecycle (`SessionState`: scheduled/transcribing/ready/failed) are JSON-encoded properties. **Registered in `LilacApp`'s container.**
+- **`DiarizationClient`** — cloud speaker-diarization via **AssemblyAI** (upload → request `speaker_labels` → poll → utterances). Optional like ML Kit/Google Sign-In: `ASSEMBLYAI_API_KEY` (env → Info.plist via `project.yml`); without it, `isConfigured == false` and processing falls back to the on-device `SpeechTranscriber` (flat, unlabeled text). **This sends session audio off-device** — the record screen says so.
+- **`SessionProcessor`** (`@MainActor`) — record → transcribe (diarize, else on-device) → summarize, writing results back. A static `inFlight` set prevents double-processing. Triggered after recording, from the detail screen's `.task`, and resumed on launch via `runPending()` (added to `LilacApp` after Rewind).
+- **`SessionAI`** — summary + grounded Q&A through the shared `DeepSeekClient`; fails gracefully.
+- **Views:** `SessionsView` (calendar strip of upcoming ↑ · recorded list · bottom dock with the AI-companion chatbox + a `GlowOrbView` record orb), `SessionRecordView` (mic + timer), `SessionScheduleForm` (calendar side), `SessionDetailView` (audio playback via `AudioPlayer.play(url:id:)`, speaker-labeled transcript with a swap toggle, summary, Q&A). Uses the home lavender palette.
+- **Recall:** `CompanionView` folds the most recent session summaries into its grounding, so the companion can draw on what was worked through in therapy.
+- `Views/Meetings/MeetingsView.swift` was deleted (superseded by this feature). The old `Meeting` model is now unused but stays registered in the container to avoid a migration.
+
 ### The reusable journaling engine (`Sources/Journal/`)
 
 This is the modular base every journaling type builds on — keep type-specific logic **out** of it.

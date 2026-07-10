@@ -34,6 +34,29 @@ final class AudioPlayer: NSObject, AVAudioPlayerDelegate {
         }
     }
 
+    /// Toggle playback of an on-disk file (used by recorded Sessions, whose audio
+    /// lives on disk rather than inline like short `AudioClip`s). `id` identifies
+    /// the source so a row can reflect play/stop state.
+    func toggle(url: URL, id: UUID) {
+        if playingID == id { stop() } else { play(url: url, id: id) }
+    }
+
+    func play(url: URL, id: UUID) {
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .default)
+            try session.setActive(true)
+
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.delegate = self
+            player.play()
+            self.player = player
+            playingID = id
+        } catch {
+            playingID = nil
+        }
+    }
+
     func stop() {
         player?.stop()
         player = nil

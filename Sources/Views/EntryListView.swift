@@ -48,7 +48,7 @@ struct EntryListView: View {
         case .home:
             home
         case .sessions:
-            SessionsHub()
+            SessionsView()
         case .history:
             AllEntriesView(embedded: true)
         case .journey:
@@ -587,72 +587,5 @@ private struct IconDisc: View {
             .foregroundStyle(Color.homeAccent)
             .frame(width: size, height: size)
             .background(Circle().fill(Color.homeTint))
-    }
-}
-
-// MARK: - Sessions tab
-
-/// The Sessions tab: a small hub for the AI companion and meetings.
-private struct SessionsHub: View {
-    @State private var showCompanion = false
-    @State private var showMeetings = false
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Sessions")
-                    .font(.system(size: 27, weight: .bold, design: .serif))
-                    .foregroundStyle(Color.homeHeading)
-                    .padding(.top, 8)
-
-                SessionCard(
-                    icon: "message",
-                    title: "AI companion",
-                    subtitle: "A gentle listener that reflects your words back."
-                ) { showCompanion = true }
-
-                SessionCard(
-                    icon: "person.2",
-                    title: "Meetings",
-                    subtitle: "Track therapy sessions and check-ins."
-                ) { showMeetings = true }
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 40)
-        }
-        .sheet(isPresented: $showCompanion) { CompanionView() }
-        .sheet(isPresented: $showMeetings) { MeetingsView() }
-    }
-}
-
-private struct SessionCard: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 14) {
-                IconDisc(symbol: icon, size: 46)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(.system(.headline, design: .serif))
-                        .foregroundStyle(Color.homeHeading)
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(Color.homeSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 4)
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Color.homeSecondary.opacity(0.6))
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity)
-            .homeCardBackground()
-        }
-        .buttonStyle(.plain)
     }
 }

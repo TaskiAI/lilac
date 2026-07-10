@@ -11,6 +11,7 @@ struct CompanionView: View {
     @Query(sort: \CompanionMessage.createdAt, order: .forward) private var messages: [CompanionMessage]
     @Query(sort: \JournalEntry.createdAt, order: .reverse) private var entries: [JournalEntry]
     @Query(sort: \InsightReport.generatedAt, order: .reverse) private var reports: [InsightReport]
+    @Query(sort: \TherapySession.date, order: .reverse) private var sessions: [TherapySession]
 
     @State private var draft = ""
     @State private var isThinking = false
@@ -190,6 +191,18 @@ struct CompanionView: View {
             return joined.isEmpty ? nil : String(joined.prefix(180))
         }
         if !snippets.isEmpty { pieces.append(snippets.joined(separator: " | ")) }
+
+        // Recall from recorded therapy sessions: the most recent summaries, so the
+        // companion can gently connect what the writer worked through there.
+        let sessionNotes: [String] = sessions
+            .prefix(2)
+            .compactMap { session in
+                guard let summary = session.summary, !summary.isEmpty else { return nil }
+                let when = session.date.formatted(date: .abbreviated, time: .omitted)
+                return "Session (\(when)): \(String(summary.prefix(220)))"
+            }
+        if !sessionNotes.isEmpty { pieces.append(sessionNotes.joined(separator: "\n")) }
+
         return pieces.isEmpty ? nil : pieces.joined(separator: "\n")
     }
 }

@@ -32,6 +32,11 @@ targets:
         # environment (env var / xcconfig) so it is never committed; unset
         # bakes in an empty value and the app runs offline on PromptBank.
         INFOPLIST_KEY_DEEPSEEK_API_KEY: "$(DEEPSEEK_API_KEY)"
+        # AssemblyAI key for cloud speaker-diarization of recorded therapy
+        # sessions. Resolved from the build environment (env var / xcconfig) so it
+        # is never committed; unset bakes in an empty value and sessions fall back
+        # to an on-device, unlabeled transcript.
+        INFOPLIST_KEY_ASSEMBLYAI_API_KEY: "$(ASSEMBLYAI_API_KEY)"
         # Audio journaling: record voice notes and transcribe them to text.
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "Lilac records your spoken journal entries."
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Lilac transcribes your recordings into text you can edit."

@@ -15,7 +15,8 @@ struct LilacApp: App {
                 AICallLog.self,
                 CompanionMessage.self,
                 Meeting.self,
-                InsightReport.self
+                InsightReport.self,
+                TherapySession.self
             )
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
@@ -62,6 +63,8 @@ private struct RootView: View {
                         // (both gated on their own privacy settings).
                         await TranscriptionEngine(context: container.mainContext).run()
                         await RewindEngine(context: container.mainContext).run()
+                        // Resume any session transcription interrupted by a close.
+                        await SessionProcessor(context: container.mainContext).runPending()
                         let insights = InsightEngine(context: container.mainContext)
                         if insights.isEnabled, insights.isStale() {
                             let focuses = FocusAreas.decode(

@@ -30,6 +30,8 @@ extension Color {
     static let homeAccentDeep = Color(red: 0.478, green: 0.408, blue: 0.706)
     /// Muted slate-grey for secondary copy and timestamps.
     static let homeSecondary = Color(red: 0.596, green: 0.584, blue: 0.655)
+    /// The white surface of a card / raised control (over the lavender gradient).
+    static let homeCard = Color.white
     /// The faint lavender fill behind the primary CTA cards.
     static let homeTint = Color(red: 0.957, green: 0.945, blue: 0.984)
     /// Very light lavender used for chip / icon-circle fills.
