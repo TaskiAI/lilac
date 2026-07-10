@@ -64,6 +64,14 @@ struct EntryListView: View {
             .listRowInsets(EdgeInsets())
             .listRowBackground(Color.clear)
 
+            Section {
+                RewindActivitySection()
+            } header: {
+                Text("Activities")
+            }
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+
             if let onThisDay = onThisDayEntry {
                 Section {
                     NavigationLink(value: onThisDay) {

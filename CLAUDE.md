@@ -30,7 +30,20 @@ Single-window SwiftUI app. Data flows through SwiftData; there is no separate vi
 - `Views/EntryEditorView.swift` — a **concrete screen**, not the surface itself: the free-form diary, which is just `JournalPage(entry:)` with no accessory. New journaling modes are new thin screens like this one.
 - `Prompts/PromptBank.swift` — a hardcoded list of curated prompts per style with `random(for:excluding:)`. The offline source of truth: always available, no network or key.
 - `Prompts/PromptEngine.swift` — the AI-generated prompt engine. `PromptEngine.shared.prompt(for:excluding:)` (async) asks DeepSeek (OpenAI-compatible Chat Completions API, `deepseek-chat`, raw `URLSession` with a `Bearer` key) for a fresh, style-matched prompt, and **falls back to `PromptBank` on any failure** (no key, offline, non-2xx, decode error) — callers never see an error. The key is read from `DEEPSEEK_API_KEY` (process environment, or the Info.plist value wired through `project.yml`); no key ⇒ offline mode. Call sites seed instantly from `PromptBank` then upgrade to a generated prompt in a `@MainActor` `Task` (`EntryListView.newEntry`, the shuffle button in `EntryEditorView`).
+- `Prompts/DeepSeekClient.swift` — shared DeepSeek Chat Completions client + `DEEPSEEK_API_KEY` resolution, used by the Rewind AI calls (the older `PromptEngine` still has its own copy).
 - `Theme.swift` — color tokens: the diary palette (below) plus the legacy `Color.lilac` / `Color.lilacSoft`.
+
+### The Rewind activity (`Sources/Rewind/` + `Sources/Views/Rewind/`)
+
+An AI-integrated "Activities" feature that resurfaces past entries to help users see change over time (NOT nostalgia/"on this day"). Since Lilac is a **local iOS app** (no backend/SQL/REST/auth), the spec's tables → SwiftData `@Model`s, the cron job → `RewindEngine.run()` on launch, and the REST endpoints → `RewindEngine` methods.
+
+- **Models:** `RewindCandidate`, `RewindSession`, `RewindSettings`, `AICallLog` (`RewindModels.swift`); enums in `RewindEnums.swift`. `JournalEntry` gained `themeTags`/`salience`/`crisisFlagged`/`classifiedAt` and a `linkedEntry` relationship (all optional/relationship — migration-safe). **All new `@Model`s must be registered in `LilacApp`'s `ModelContainer`.**
+- **`RewindSelector`** — the single, pure, Foundation-only guardrail chokepoint: enforces `off`/disabled, crisis exclusion, muted-theme exclusion, 30-day recency, and frequency cadence. **This is what the tests target** (`Tests/RewindSelectorTests.swift`) — the guardrails live here, never in the UI.
+- **`RewindEngine`** (`@MainActor`) — classifies pending entries (tagging + safety via `RewindAI`/DeepSeek), scores/maintains candidates, and exposes `next`/`markShown`/`record`/`reflect`/`entries(forTheme:)`/`hardestWeeks`/`bridge`. Safety posture enforced in code: an entry is only eligible once its **safety** classification has run; failures/unreadable entries are never surfaced. `session_echo` is stubbed behind `sessionEchoEnabled = false` (no session data exists).
+- **`RewindAI`** — the two/three narrow DeepSeek calls (crisis classify, per-entry tag+salience, bridge sentence); all fail gracefully. Every call is written to `AICallLog` for auditability.
+- **Text problem:** entries are handwritten ink, so `JournalEntry.classifiableText()` assembles prompt + typed/transcribed text + best-effort **Vision handwriting OCR** (`HandwritingTextExtractor`). Unreliable — see the safety caveat.
+- **Views** (`Sources/Views/Rewind/`): `RewindCard`, `ThenNowView`, `ThreadRevisitBrowser` (incl. confirmation-gated "hardest weeks"), `RewindSettingsPanel`; `RewindActivitySection` is embedded in `EntryListView`'s "Activities" section. Uses the lilac home-screen palette.
+- **Privacy:** Rewind (and its DeepSeek calls) sends entry text off-device; gated on `RewindSettings.enabled` (defaults on).
 
 ### The reusable journaling engine (`Sources/Journal/`)
 

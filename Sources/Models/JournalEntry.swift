@@ -36,6 +36,26 @@ final class JournalEntry {
     /// through `audioClips`; nil for every other format.
     private var audioClipsData: Data?
 
+    // MARK: Rewind metadata (all optional/relationship — migration-safe)
+
+    /// Theme tags for the Rewind feature, JSON-encoded; read/written via `themeTags`.
+    private var themeTagsData: Data? = nil
+    /// Coarse emotional salience 1…5 from the DeepSeek tagging call; nil until classified.
+    var salience: Double? = nil
+    /// Crisis/self-harm screening result; nil = not yet classified. Crisis-flagged
+    /// entries are never surfaced passively.
+    var crisisFlagged: Bool? = nil
+    /// When the tagging + safety classification last ran (skip re-classifying).
+    var classifiedAt: Date? = nil
+    /// For a reflection written against a rewound entry: the source entry it responds to.
+    var linkedEntry: JournalEntry? = nil
+
+    /// Theme tags, decoded/encoded from `themeTagsData`.
+    var themeTags: [String] {
+        get { themeTagsData.flatMap { try? JSONDecoder().decode([String].self, from: $0) } ?? [] }
+        set { themeTagsData = try? JSONEncoder().encode(newValue) }
+    }
+
     var style: JournalStyle {
         get { styleRawValue.flatMap(JournalStyle.init(rawValue:)) ?? .freeFlow }
         set { styleRawValue = newValue.rawValue }
