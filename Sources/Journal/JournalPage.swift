@@ -32,6 +32,7 @@ struct JournalPage<Accessory: View>: View {
     @State private var headerHeight: CGFloat = 0
     @State private var scrollOffset: CGFloat = 0
     @State private var showTranscript = false
+    @State private var showingPromptPicker = false
 
     // Writing assistant (idle / blank-page nudges)
     @State private var activityTick = 0
@@ -185,6 +186,15 @@ struct JournalPage<Accessory: View>: View {
         .sheet(isPresented: $showTranscript) {
             TranscriptView(entry: entry)
         }
+        .sheet(isPresented: $showingPromptPicker) {
+            PromptPickerSheet(
+                onPick: { prompt, style in
+                    entry.prompt = prompt
+                    entry.style = style
+                },
+                onClear: { entry.prompt = "" }
+            )
+        }
         .onDisappear {
             // Transcribe fresh writing as soon as the page closes, so the words
             // are ready for search and the AI tools without waiting for launch.
@@ -208,6 +218,7 @@ struct JournalPage<Accessory: View>: View {
                     .font(.system(.subheadline, design: .serif).italic())
                     .foregroundStyle(theme.ink.opacity(0.55))
             }
+            promptControl
             accessory()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -220,6 +231,59 @@ struct JournalPage<Accessory: View>: View {
             }
         )
         .onPreferenceChange(HeaderHeightKey.self) { headerHeight = $0 }
+    }
+
+    /// The prompt picker at the top of the page: an "add a prompt" pill when
+    /// blank, or the chosen prompt with shuffle / change / remove.
+    @ViewBuilder
+    private var promptControl: some View {
+        if entry.prompt.isEmpty {
+            Button {
+                showingPromptPicker = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                    Text("Add a writing prompt")
+                }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Color.homeAccent)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(Capsule().fill(Color.homeAccent.opacity(0.1)))
+            }
+            .buttonStyle(.plain)
+        } else {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Image(systemName: entry.style.icon)
+                        Text(entry.style.title)
+                            .textCase(.uppercase)
+                    }
+                    .font(.system(.caption, design: .serif).weight(.semibold))
+                    .foregroundStyle(Color.homeAccent)
+
+                    Text(entry.prompt)
+                        .font(.system(.title3, design: .serif).weight(.medium))
+                        .foregroundStyle(theme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Menu {
+                    Button { shufflePrompt() } label: { Label("Shuffle", systemImage: "shuffle") }
+                    Button { showingPromptPicker = true } label: { Label("Choose another", systemImage: "text.badge.plus") }
+                    Button(role: .destructive) { entry.prompt = "" } label: { Label("Remove prompt", systemImage: "xmark") }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3)
+                        .foregroundStyle(Color.homeAccent)
+                }
+            }
+        }
+    }
+
+    private func shufflePrompt() {
+        entry.prompt = PromptBank.random(for: entry.style, excluding: entry.prompt)
     }
 
     private var spacingControl: some View {

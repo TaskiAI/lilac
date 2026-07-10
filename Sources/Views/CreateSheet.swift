@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// Opened from the home orb: choose how to journal. Writing leads to its own
-/// prompt choices (a blank "quick write" or a prompted style); the other formats
-/// (audio, drawing, diagram, picture, log) start directly. Selections call back
-/// to the host, which creates the entry and opens it on the main navigation.
+/// Opened from the home orb: choose how to journal. Every option goes straight
+/// to its journaling page — Writing opens a blank page whose prompt picker lives
+/// at the top of the page, and the other formats open their editor directly.
 struct CreateSheet: View {
     /// prompt (nil = blank) + style → start a writing entry.
     let onWriting: (String?, JournalStyle) -> Void
@@ -16,13 +15,11 @@ struct CreateSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 12) {
-                    NavigationLink {
-                        WritingOptionsView(onPick: onWriting)
-                    } label: {
+                    Button { onWriting(nil, .freeFlow) } label: {
                         CreateRow(
                             icon: "square.and.pencil",
                             title: "Writing",
-                            subtitle: "Handwrite freely or from a prompt."
+                            subtitle: "Handwrite freely, or pick a prompt on the page."
                         )
                     }
                     .buttonStyle(.plain)
@@ -50,47 +47,6 @@ struct CreateSheet: View {
             }
         }
         .tint(.homeAccent)
-    }
-}
-
-/// Writing's own prompt choices: a blank page (quick write) or a prompted style.
-private struct WritingOptionsView: View {
-    let onPick: (String?, JournalStyle) -> Void
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 12) {
-                Button { onPick(nil, .freeFlow) } label: {
-                    CreateRow(
-                        icon: "pencil.line",
-                        title: "Blank page",
-                        subtitle: "Just start writing — no prompt."
-                    )
-                }
-                .buttonStyle(.plain)
-
-                Text("Or start from a prompt")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(Color.homeSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 6)
-
-                ForEach(JournalStyle.allCases) { style in
-                    Button { onPick(PromptBank.random(for: style), style) } label: {
-                        CreateRow(icon: style.icon, title: style.title, subtitle: style.subtitle)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(20)
-        }
-        .background(
-            LinearGradient(colors: [.homeBackgroundTop, .homeBackgroundBottom],
-                           startPoint: .top, endPoint: .bottom)
-            .ignoresSafeArea()
-        )
-        .navigationTitle("Writing")
-        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

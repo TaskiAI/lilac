@@ -68,6 +68,12 @@ struct EntryListView: View {
         ScrollView {
             VStack(spacing: 18) {
                 GreetingHeader(greeting: greeting, date: dateString) { showingSettings = true }
+                QuoteCard(text: Self.seededQuote())
+                PromptCard(
+                    question: promptQuestion,
+                    onShuffle: { promptQuestion = Self.seededQuestion(excluding: promptQuestion) },
+                    onStart: { startPromptedEntry(promptQuestion) }
+                )
                 GoalsCard(goals: goals) { showingGoals = true }
                 WeekCard(
                     weekDays: Self.weekDays(),
@@ -75,12 +81,6 @@ struct EntryListView: View {
                     todays: todaysEntries,
                     onOpen: { startPromptedEntry(nil, existing: $0) },
                     onRecap: { selectedTab = .journey }
-                )
-                QuoteCard(text: Self.seededQuote())
-                PromptCard(
-                    question: promptQuestion,
-                    onShuffle: { promptQuestion = Self.seededQuestion(excluding: promptQuestion) },
-                    onStart: { startPromptedEntry(promptQuestion) }
                 )
             }
             .padding(.horizontal, 20)

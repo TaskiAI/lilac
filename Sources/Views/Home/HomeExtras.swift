@@ -16,13 +16,8 @@ func journalDestination(for entry: JournalEntry) -> some View {
     case .log?:
         LogJournalView(entry: entry)
     default:
-        // A writing entry: the plain page when blank (quick write), or the
-        // prompted screen when it carries a prompt.
-        if entry.prompt.isEmpty {
-            JournalPage(entry: entry)
-        } else {
-            EntryEditorView(entry: entry)
-        }
+        // A writing entry: the unified page, with its prompt picker on top.
+        JournalPage(entry: entry)
     }
 }
 
