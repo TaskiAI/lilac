@@ -493,23 +493,6 @@ private struct TabBarItem: View {
     }
 }
 
-// MARK: - Shared modifiers & layout
-
-private extension View {
-    /// The standard white home card: rounded, hairline-bordered, softly shadowed.
-    func homeCardBackground() -> some View {
-        background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(Color.homeCard)
-                .shadow(color: Color.homeAccent.opacity(0.10), radius: 12, x: 0, y: 4)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18)
-                .stroke(Color.homeHairline.opacity(0.7), lineWidth: 1)
-        )
-    }
-}
-
 // MARK: - Activities sheet
 
 /// Opened from "Start an activity": the Rewind resurfacing activity plus the
@@ -518,7 +501,6 @@ private struct ActivitiesSheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @State private var path: [JournalEntry] = []
-    @State private var creatingFormat: JournalFormat?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -547,7 +529,6 @@ private struct ActivitiesSheet: View {
             .navigationTitle("Activities")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: JournalEntry.self) { journalDestination(for: $0) }
-            .sheet(item: $creatingFormat) { ComingSoonEditor(format: $0) }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
@@ -557,14 +538,10 @@ private struct ActivitiesSheet: View {
         .tint(.homeAccent)
     }
 
+    /// Every format now has a real editor — create the entry and open it.
     private func create(_ format: JournalFormat) {
-        switch format {
-        case .drawing, .diagram, .photo, .audio:
-            let entry = JournalEntry(prompt: "", format: format)
-            context.insert(entry)
-            path.append(entry)
-        case .log:
-            creatingFormat = format
-        }
+        let entry = JournalEntry(prompt: "", format: format)
+        context.insert(entry)
+        path.append(entry)
     }
 }

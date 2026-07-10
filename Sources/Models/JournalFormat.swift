@@ -3,10 +3,7 @@ import Foundation
 /// A non-writing journaling format offered from the home screen's "Create"
 /// gallery. The handwritten, prompted writing modes live under `JournalStyle`;
 /// these are the other media — pictures, diagrams, audio, free sketching, and
-/// structured logs.
-///
-/// The entry-point UI ships now; each format's editor is filled in later, so
-/// every case is currently surfaced as "coming soon" via `ComingSoonEditor`.
+/// structured logs. Every format now has a real editor.
 enum JournalFormat: String, CaseIterable, Identifiable {
     case photo
     case diagram
@@ -46,12 +43,6 @@ enum JournalFormat: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Whether the format has a real editor yet. Live formats open an entry; the
-    /// rest present `ComingSoonEditor`.
-    var isAvailable: Bool {
-        switch self {
-        case .photo, .drawing, .diagram, .audio: return true
-        case .log: return false
-        }
-    }
+    /// Whether the format has a real editor yet. Every format is now live.
+    var isAvailable: Bool { true }
 }

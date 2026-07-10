@@ -36,6 +36,10 @@ final class JournalEntry {
     /// through `audioClips`; nil for every other format.
     private var audioClipsData: Data?
 
+    /// The structured check-in of a Log entry, JSON-encoded. Read/written through
+    /// `moodLog`; nil for every other format.
+    private var logData: Data?
+
     // MARK: Rewind metadata (all optional/relationship — migration-safe)
 
     /// Theme tags for the Rewind feature, JSON-encoded; read/written via `themeTags`.
@@ -86,6 +90,13 @@ final class JournalEntry {
         set { audioClipsData = try? JSONEncoder().encode(newValue) }
     }
 
+    /// The structured check-in of a Log entry. Decodes/encodes `logData`; a fresh
+    /// `MoodLog` (with the default habit checklist) when the entry has none yet.
+    var moodLog: MoodLog {
+        get { logData.flatMap { try? JSONDecoder().decode(MoodLog.self, from: $0) } ?? MoodLog() }
+        set { logData = try? JSONEncoder().encode(newValue) }
+    }
+
     init(
         createdAt: Date = .now,
         prompt: String,
@@ -106,5 +117,6 @@ final class JournalEntry {
         self.collageData = nil
         self.text = text
         self.audioClipsData = nil
+        self.logData = nil
     }
 }
