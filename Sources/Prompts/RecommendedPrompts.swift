@@ -1,10 +1,40 @@
 import Foundation
 
+/// Where a suggested prompt came from, so the UI can label it honestly and
+/// gently. The point is to steer, not to write for the user.
+enum PromptSource: Hashable {
+    /// A varied prompt from the curated bank — the default, always-available.
+    case curated
+    /// Chosen because it leans toward one of the writer's focus areas.
+    case focus(String)
+    /// Surfaced from the writer's own recent reflections (an insight).
+    case reflection
+
+    /// A short, quiet label. `nil` for curated (no label needed).
+    var label: String? {
+        switch self {
+        case .curated: return nil
+        case .focus(let area): return "Toward \(area.lowercased())"
+        case .reflection: return "From your reflections"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .curated: return "text.quote"
+        case .focus: return "scope"
+        case .reflection: return "sparkles"
+        }
+    }
+}
+
 /// One suggested prompt for the daily-journal reminder, tagged with the style
-/// it belongs to so the entry it starts carries the right badge and pool.
+/// it belongs to so the entry it starts carries the right badge and pool, and
+/// with its `source` so the UI can hint (quietly) where it came from.
 struct RecommendedPrompt: Identifiable, Hashable {
     let text: String
     let style: JournalStyle
+    var source: PromptSource = .curated
 
     var id: String { "\(style.rawValue)|\(text)" }
 }

@@ -23,6 +23,7 @@ struct EntryListView: View {
     @State private var showingFocusEditor = false
     @State private var showingSettings = false          // gear
     @State private var showingInsights = false          // insights card
+    @State private var showingNudge = false             // "need a nudge?"
 
     @AppStorage(FocusAreas.storageKey) private var focusRaw = FocusAreas.encode(FocusAreas.defaults)
 
@@ -62,7 +63,16 @@ struct EntryListView: View {
                 SettingsView().environmentObject(auth)
             }
             .sheet(isPresented: $showingInsights) {
-                InsightsView(onStartPrompt: startPromptedEntry)
+                InsightsView(onStartPrompt: { startPromptedEntry($0) })
+            }
+            .sheet(isPresented: $showingNudge) {
+                PromptChooserView(
+                    suggestions: PromptSuggestions.list(
+                        insight: reports.first,
+                        focuses: FocusAreas.decode(focusRaw)
+                    ),
+                    onPick: { startPromptedEntry($0.text, style: $0.style) }
+                )
             }
         }
         .tint(.homeAccent)
@@ -75,11 +85,25 @@ struct EntryListView: View {
             VStack(alignment: .leading, spacing: 26) {
                 header
                 dateBlock
-                PrimaryActionCard(
-                    icon: "pencil",
-                    title: "Start daily journal",
-                    action: startDailyJournal
-                )
+                VStack(alignment: .leading, spacing: 10) {
+                    PrimaryActionCard(
+                        icon: "pencil",
+                        title: "Start daily journal",
+                        action: startDailyJournal
+                    )
+                    Button {
+                        showingNudge = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "sparkles")
+                            Text("Need a nudge to begin?")
+                        }
+                        .font(.footnote)
+                        .foregroundStyle(Color.homeAccent)
+                        .padding(.leading, 4)
+                    }
+                    .buttonStyle(.plain)
+                }
                 todaysJournals
                 PrimaryActionCard(
                     icon: "leaf",
@@ -138,9 +162,10 @@ struct EntryListView: View {
             Text(todayString)
                 .font(.system(.title3, design: .serif).weight(.medium))
                 .foregroundStyle(Color.homeAccentDeep)
-            Text("Take a moment for yourself today.")
+            Text(PromptSuggestions.dailyLine(insight: reports.first, focuses: FocusAreas.decode(focusRaw)))
                 .font(.subheadline)
                 .foregroundStyle(Color.homeSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -247,10 +272,11 @@ struct EntryListView: View {
         newEntry(style: .freeFlow, sessionLength: .quick)
     }
 
-    /// Start a writing entry from a specific prompt (used by the insight's
-    /// tailored "write on this" suggestion). Uses the prompt exactly.
-    private func startPromptedEntry(_ prompt: String) {
-        let entry = JournalEntry(prompt: prompt, style: .freeFlow, sessionLength: .quick)
+    /// Start a writing entry from a specific prompt (the insight's "write on
+    /// this" suggestion, or a chosen nudge). Uses the prompt exactly — no AI
+    /// rewrite — since the writer picked it on purpose.
+    private func startPromptedEntry(_ prompt: String, style: JournalStyle = .freeFlow) {
+        let entry = JournalEntry(prompt: prompt, style: style, sessionLength: .quick)
         context.insert(entry)
         path.append(entry)
     }
