@@ -10,6 +10,7 @@ struct CompanionView: View {
 
     @Query(sort: \CompanionMessage.createdAt, order: .forward) private var messages: [CompanionMessage]
     @Query(sort: \JournalEntry.createdAt, order: .reverse) private var entries: [JournalEntry]
+    @Query(sort: \InsightReport.generatedAt, order: .reverse) private var reports: [InsightReport]
 
     @State private var draft = ""
     @State private var isThinking = false
@@ -141,9 +142,14 @@ struct CompanionView: View {
         }
     }
 
-    /// A light, non-verbatim summary of the last few entries to ground replies.
-    /// Uses only the prompt + typed text (no handwriting OCR) to stay instant.
+    /// A light, non-verbatim summary of recent journaling to ground replies:
+    /// the latest AI insight (when present) plus the last few entries' prompt +
+    /// typed text (no handwriting OCR, to stay instant).
     private func recentJournalContext() -> String? {
+        var pieces: [String] = []
+        if let report = reports.first, report.aiPowered, !report.summary.isEmpty {
+            pieces.append("Recent insight: \(report.summary)")
+        }
         let snippets: [String] = entries.prefix(3).compactMap { entry in
             var parts: [String] = []
             if !entry.prompt.isEmpty { parts.append(entry.prompt) }
@@ -151,7 +157,8 @@ struct CompanionView: View {
             let joined = parts.joined(separator: " — ")
             return joined.isEmpty ? nil : String(joined.prefix(180))
         }
-        return snippets.isEmpty ? nil : snippets.joined(separator: " | ")
+        if !snippets.isEmpty { pieces.append(snippets.joined(separator: " | ")) }
+        return pieces.isEmpty ? nil : pieces.joined(separator: "\n")
     }
 }
 

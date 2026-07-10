@@ -9,6 +9,7 @@ struct EntryListView: View {
     @Environment(\.modelContext) private var context
     @EnvironmentObject private var auth: AuthManager
     @Query(sort: \JournalEntry.createdAt, order: .reverse) private var entries: [JournalEntry]
+    @Query(sort: \InsightReport.generatedAt, order: .reverse) private var reports: [InsightReport]
 
     @State private var path: [JournalEntry] = []
     @State private var selectedTab: HomeTab = .journal
@@ -21,6 +22,7 @@ struct EntryListView: View {
     @State private var showingNotifications = false     // bell
     @State private var showingFocusEditor = false
     @State private var showingSettings = false          // gear
+    @State private var showingInsights = false          // insights card
 
     @AppStorage(FocusAreas.storageKey) private var focusRaw = FocusAreas.encode(FocusAreas.defaults)
 
@@ -59,6 +61,9 @@ struct EntryListView: View {
             .sheet(isPresented: $showingSettings) {
                 SettingsView().environmentObject(auth)
             }
+            .sheet(isPresented: $showingInsights) {
+                InsightsView(onStartPrompt: startPromptedEntry)
+            }
         }
         .tint(.homeAccent)
     }
@@ -82,6 +87,7 @@ struct EntryListView: View {
                     action: { showingActivities = true }
                 )
                 focusSection
+                InsightsCard(headline: reports.first?.headline) { showingInsights = true }
                 quickRow
                 HistoryButton { showingAllEntries = true }
             }
@@ -239,6 +245,14 @@ struct EntryListView: View {
     /// instantly then upgraded to a generated prompt.
     private func startDailyJournal() {
         newEntry(style: .freeFlow, sessionLength: .quick)
+    }
+
+    /// Start a writing entry from a specific prompt (used by the insight's
+    /// tailored "write on this" suggestion). Uses the prompt exactly.
+    private func startPromptedEntry(_ prompt: String) {
+        let entry = JournalEntry(prompt: prompt, style: .freeFlow, sessionLength: .quick)
+        context.insert(entry)
+        path.append(entry)
     }
 
     private func newEntry(style: JournalStyle, sessionLength: SessionLength) {
@@ -440,6 +454,44 @@ private struct HistoryButton: View {
                     .font(.system(.body, design: .serif).weight(.medium))
                     .foregroundStyle(Color.homeAccentDeep)
                 Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Color.homeSecondary.opacity(0.6))
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity)
+            .homeCardBackground()
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// The home entry point into Insights. Shows the latest AI headline as a teaser
+/// when one exists, or an invitation to discover patterns.
+private struct InsightsCard: View {
+    let headline: String?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle().fill(Color.homeTint).frame(width: 44, height: 44)
+                    Image(systemName: "sparkles")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.homeAccent)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Insights")
+                        .font(.system(.body, design: .serif).weight(.medium))
+                        .foregroundStyle(Color.homeAccentDeep)
+                    Text(headline?.isEmpty == false ? headline! : "See what your journaling reveals")
+                        .font(.caption)
+                        .foregroundStyle(Color.homeSecondary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 4)
                 Image(systemName: "chevron.right")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color.homeSecondary.opacity(0.6))

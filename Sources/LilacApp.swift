@@ -14,7 +14,8 @@ struct LilacApp: App {
                 RewindSettings.self,
                 AICallLog.self,
                 CompanionMessage.self,
-                Meeting.self
+                Meeting.self,
+                InsightReport.self
             )
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
@@ -55,8 +56,17 @@ private struct RootView: View {
                     .environmentObject(auth)
                     .task {
                         // The local stand-in for the scheduled backend job:
-                        // classify pending entries and refresh candidates.
+                        // classify pending entries and refresh candidates, then
+                        // refresh insights if they've gone stale (both gated on
+                        // their own privacy settings).
                         await RewindEngine(context: container.mainContext).run()
+                        let insights = InsightEngine(context: container.mainContext)
+                        if insights.isEnabled, insights.isStale() {
+                            let focuses = FocusAreas.decode(
+                                UserDefaults.standard.string(forKey: FocusAreas.storageKey) ?? ""
+                            )
+                            await insights.generate(focuses: focuses)
+                        }
                     }
             }
         }

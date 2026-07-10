@@ -68,4 +68,5 @@ enum AICallKind: String, Codable {
     case tagging
     case safety
     case bridge
+    case insight
 }

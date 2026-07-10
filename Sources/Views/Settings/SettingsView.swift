@@ -8,12 +8,14 @@ struct SettingsView: View {
 
     @State private var sheet: SettingsSheet?
     @State private var showResetConfirm = false
+    @AppStorage(InsightEngine.enabledKey) private var insightsEnabled = true
 
     var body: some View {
         NavigationStack {
             List {
                 profileSection
                 securitySection
+                privacySection
                 aboutSection
                 accountSection
             }
@@ -118,6 +120,19 @@ struct SettingsView: View {
             }
         }
         .tint(.homeAccent)
+    }
+
+    private var privacySection: some View {
+        Section {
+            Toggle(isOn: $insightsEnabled) {
+                Label("AI insights", systemImage: "sparkles")
+            }
+            .tint(.homeAccent)
+        } header: {
+            Text("Privacy")
+        } footer: {
+            Text("When on, Lilac sends a summary of recent entries to DeepSeek to generate insights. Off keeps everything on-device (you still get local trends).")
+        }
     }
 
     private var aboutSection: some View {
