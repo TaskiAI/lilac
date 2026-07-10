@@ -18,7 +18,9 @@ xcodebuild -project Lilac.xcodeproj -scheme Lilac \
 
 New Swift files under `Sources/` are picked up automatically on the next `xcodegen generate` (the target sources the whole `Sources` directory) — no need to register files manually.
 
-There is no test target and no lint config in the repo yet.
+**Optional CocoaPods dep (handwriting):** ML Kit Digital Ink is integrated via the `Podfile`. It is optional — the app builds and runs without it (Vision fallback). To enable it: `xcodegen generate` → `pod install` → open `Lilac.xcworkspace`. Re-run `pod install` after every `xcodegen generate` (regenerating drops the pods integration).
+
+There is a `LilacTests` unit-test target (`Tests/`, added with the Rewind feature) run via the `Lilac` scheme; no lint config yet.
 
 ## Architecture
 
@@ -41,7 +43,7 @@ An AI-integrated "Activities" feature that resurfaces past entries to help users
 - **`RewindSelector`** — the single, pure, Foundation-only guardrail chokepoint: enforces `off`/disabled, crisis exclusion, muted-theme exclusion, 30-day recency, and frequency cadence. **This is what the tests target** (`Tests/RewindSelectorTests.swift`) — the guardrails live here, never in the UI.
 - **`RewindEngine`** (`@MainActor`) — classifies pending entries (tagging + safety via `RewindAI`/DeepSeek), scores/maintains candidates, and exposes `next`/`markShown`/`record`/`reflect`/`entries(forTheme:)`/`hardestWeeks`/`bridge`. Safety posture enforced in code: an entry is only eligible once its **safety** classification has run; failures/unreadable entries are never surfaced. `session_echo` is stubbed behind `sessionEchoEnabled = false` (no session data exists).
 - **`RewindAI`** — the two/three narrow DeepSeek calls (crisis classify, per-entry tag+salience, bridge sentence); all fail gracefully. Every call is written to `AICallLog` for auditability.
-- **Text problem:** entries are handwritten ink, so `JournalEntry.classifiableText()` assembles prompt + typed/transcribed text + best-effort **Vision handwriting OCR** (`HandwritingTextExtractor`). Unreliable — see the safety caveat.
+- **Text problem:** entries are handwritten ink, so `JournalEntry.classifiableText()` assembles prompt + typed/transcribed text + recognized handwriting (`HandwritingTextExtractor`). Two backends: **Google ML Kit Digital Ink** (stroke-based, on-device, preferred — `MLKitHandwritingRecognizer`, guarded by `#if canImport`) when the `GoogleMLKit/DigitalInkRecognition` pod is installed (see `Podfile`), else **Apple Vision** OCR (image-based, weaker, zero-dependency). ML Kit is far more accurate on real handwriting; Vision keeps the app building without CocoaPods. Recognition is on-device, but the downstream DeepSeek classify/bridge calls still send the resulting text off-device.
 - **Views** (`Sources/Views/Rewind/`): `RewindCard`, `ThenNowView`, `ThreadRevisitBrowser` (incl. confirmation-gated "hardest weeks"), `RewindSettingsPanel`; `RewindActivitySection` is embedded in `EntryListView`'s "Activities" section. Uses the lilac home-screen palette.
 - **Privacy:** Rewind (and its DeepSeek calls) sends entry text off-device; gated on `RewindSettings.enabled` (defaults on).
 
