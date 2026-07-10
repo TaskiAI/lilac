@@ -32,6 +32,10 @@ final class JournalEntry {
     /// Audio entry. Optional so pre-existing rows migrate cleanly.
     var text: String?
 
+    /// An optional user-given title for the entry. nil ⇒ untitled; lists fall
+    /// back to the prompt/transcript. Migration-safe optional.
+    var title: String? = nil
+
     /// The recorded voice notes of an Audio entry, JSON-encoded. Read/written
     /// through `audioClips`; nil for every other format.
     private var audioClipsData: Data?

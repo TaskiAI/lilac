@@ -374,6 +374,7 @@ private struct TodayJournalRow: View {
     }
 
     private var title: String {
+        if let t = entry.title, !t.isEmpty { return t }
         if let format = entry.format { return "\(format.title) Journal" }
         switch hour {
         case 5..<12: return "Morning Journal"

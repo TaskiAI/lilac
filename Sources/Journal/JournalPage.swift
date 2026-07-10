@@ -26,14 +26,22 @@ struct JournalPage<Accessory: View>: View {
     @ViewBuilder var accessory: () -> Accessory
 
     @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
     @State private var lineSpacing: CGFloat
     @State private var headerHeight: CGFloat = 0
     @State private var scrollOffset: CGFloat = 0
     @State private var showTranscript = false
 
+    private var titleBinding: Binding<String> {
+        Binding(
+            get: { entry.title ?? "" },
+            set: { entry.title = $0.isEmpty ? nil : $0 }
+        )
+    }
+
     init(
         entry: JournalEntry,
-        theme: JournalTheme = .diary,
+        theme: JournalTheme = .clean,
         @ViewBuilder accessory: @escaping () -> Accessory = { EmptyView() }
     ) {
         self.entry = entry
@@ -80,13 +88,21 @@ struct JournalPage<Accessory: View>: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .tint(theme.ink)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
                 Button {
                     showTranscript = true
                 } label: {
                     Image(systemName: "text.magnifyingglass")
                 }
                 .accessibilityLabel("Transcript")
+
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "checkmark")
+                        .fontWeight(.semibold)
+                }
+                .accessibilityLabel("Done writing")
             }
         }
         .sheet(isPresented: $showTranscript) {
@@ -105,11 +121,13 @@ struct JournalPage<Accessory: View>: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.createdAt.formatted(.dateTime.weekday(.wide)))
+            VStack(alignment: .leading, spacing: 4) {
+                TextField("Untitled", text: titleBinding, axis: .vertical)
                     .font(.system(.largeTitle, design: .serif))
                     .foregroundStyle(theme.ink)
-                Text(entry.createdAt.formatted(.dateTime.day().month(.wide).year()))
+                    .textInputAutocapitalization(.sentences)
+                    .submitLabel(.done)
+                Text(entry.createdAt.formatted(.dateTime.weekday(.wide).month(.wide).day().year()))
                     .font(.system(.subheadline, design: .serif).italic())
                     .foregroundStyle(theme.ink.opacity(0.55))
             }

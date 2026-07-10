@@ -52,11 +52,11 @@ An AI-integrated "Activities" feature that resurfaces past entries to help users
 
 This is the modular base every journaling type builds on — keep type-specific logic **out** of it.
 
-- `Journal/JournalPage.swift` — `JournalPage<Accessory: View>`, the whole writing surface: date header → optional `accessory` slot → ruled page + canvas → spacing slider. The **extension points** are the two initializer parameters:
+- `Journal/JournalPage.swift` — `JournalPage<Accessory: View>`, the whole writing surface: header (editable `entry.title` + full date) → optional `accessory` slot → ruled page + canvas → spacing slider. A trailing toolbar carries a transcript button and a **checkmark ("Done writing")** that dismisses; the pushed nav stack supplies the back button. The **extension points** are the two initializer parameters:
   - `accessory:` — a `@ViewBuilder` slot rendered under the date. A prompted mode passes a prompt banner here; the free diary passes nothing (defaults to `EmptyView`).
-  - `theme:` — a `JournalTheme` (defaults to `.diary`) so a mode can restyle paper/ink/rules/spacing without touching the page.
+  - `theme:` — a `JournalTheme` (defaults to `.clean`: white paper, grey rules) so a mode can restyle paper/ink/rules/spacing without touching the page.
   - Line spacing is local `@State` seeded from `theme.defaultSpacing`; it is **not** persisted per entry yet.
-- `Journal/JournalTheme.swift` — `JournalTheme` value type bundling `paper`/`ink`/`rule`/`margin` colors + `spacingRange`/`defaultSpacing`. Add a new `static let` here to define a new mode's look.
+- `Journal/JournalTheme.swift` — `JournalTheme` value type bundling `paper`/`ink`/`rule`/`margin` colors + `spacingRange`/`defaultSpacing`. `.clean` (white/grey) is the writing-page default; `.diary` (warm aged paper) remains for the sketch formats. Add a new `static let` here to define a new mode's look.
 - `Journal/RuledPaper.swift` — draws the faint rules + left margin with SwiftUI `Canvas`, parameterized by `spacing` and colors. Purely decorative (`allowsHitTesting(false)`).
 - `Journal/DrawingCanvas.swift` — `UIViewRepresentable` wrapper over `PKCanvasView` for the **writing** page: fixed fountain-pen ink (color passed in), no floating tool picker, hosts the ruled background inside its scroll content, auto-grows.
 - `Journal/SketchCanvas.swift` — the free-drawing counterpart for the **drawing/diagram** formats: shows the full `PKToolPicker` (pens, eraser, colors), scrolls + auto-grows, and renders an optional dot grid (`GridBackgroundView`) behind the ink. Used by `Views/DrawingJournalView.swift` (blank paper for `.drawing`, dot grid for `.diagram`). Persistence is identical to writing — the drawing is `entry.drawingData`, autosaved via `onChange`; `updateUIView` never writes `canvas.drawing`.

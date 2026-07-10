@@ -20,4 +20,15 @@ struct JournalTheme {
         spacingRange: 26...64,
         defaultSpacing: 40
     )
+
+    /// A clean, modern writing surface: white paper with soft grey rules. The
+    /// default for the handwritten writing page.
+    static let clean = JournalTheme(
+        paper: .cleanPaper,
+        ink: .cleanInk,
+        rule: .cleanRule,
+        margin: .cleanMargin,
+        spacingRange: 26...64,
+        defaultSpacing: 40
+    )
 }

@@ -35,4 +35,15 @@ extension Color {
     /// Page-background gradient endpoints (top → bottom).
     static let homeBackgroundTop = Color.white
     static let homeBackgroundBottom = Color(red: 0.949, green: 0.937, blue: 0.984)
+
+    // MARK: - Clean writing paper (white page, grey rules)
+
+    /// The writing page — plain white.
+    static let cleanPaper = Color.white
+    /// Neutral near-black for handwriting + title.
+    static let cleanInk = Color(red: 0.15, green: 0.15, blue: 0.17)
+    /// Soft grey ruled lines.
+    static let cleanRule = Color(red: 0.82, green: 0.82, blue: 0.85)
+    /// Grey left margin + spacing slider tint.
+    static let cleanMargin = Color(red: 0.72, green: 0.72, blue: 0.77)
 }

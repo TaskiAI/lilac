@@ -103,6 +103,7 @@ private struct ArchiveRow: View {
     }
 
     private var title: String {
+        if let t = entry.title, !t.isEmpty { return t }
         if !entry.prompt.isEmpty { return entry.prompt }
         if let transcript = entry.transcript, !transcript.isEmpty { return transcript }
         if let text = entry.text, !text.isEmpty { return text }
