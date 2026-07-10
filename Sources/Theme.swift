@@ -15,4 +15,24 @@ extension Color {
     static let rule = Color(red: 0.80, green: 0.72, blue: 0.57).opacity(0.6)
     /// Dried lilac — the left margin.
     static let margin = Color(red: 0.60, green: 0.49, blue: 0.62)
+
+    // MARK: - Home palette (soft lavender)
+    //
+    // The home screen wears a lighter, airier lavender than the aged-paper
+    // diary. These tokens are scoped to the home surface; the writing page
+    // still routes through `JournalTheme`.
+
+    /// Primary lavender — headings, active icons, accents.
+    static let homeAccent = Color(red: 0.545, green: 0.478, blue: 0.753)
+    /// A deeper lavender for the hero greeting.
+    static let homeAccentDeep = Color(red: 0.478, green: 0.408, blue: 0.706)
+    /// Muted slate-grey for secondary copy and timestamps.
+    static let homeSecondary = Color(red: 0.596, green: 0.584, blue: 0.655)
+    /// The faint lavender fill behind the primary CTA cards.
+    static let homeTint = Color(red: 0.957, green: 0.945, blue: 0.984)
+    /// Very light lavender used for chip / icon-circle fills.
+    static let homeHairline = Color(red: 0.878, green: 0.855, blue: 0.945)
+    /// Page-background gradient endpoints (top → bottom).
+    static let homeBackgroundTop = Color.white
+    static let homeBackgroundBottom = Color(red: 0.949, green: 0.937, blue: 0.984)
 }

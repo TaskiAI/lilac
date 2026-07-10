@@ -2,159 +2,246 @@ import SwiftUI
 import SwiftData
 import PencilKit
 
-/// The home screen: your journal, newest entry first.
+/// The home screen — a calm, lavender landing page. It greets the writer by
+/// time of day, shows today's entries, and offers the ways in: start today's
+/// journal, start an activity, quick-write, and browse history.
 struct EntryListView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \JournalEntry.createdAt, order: .reverse) private var entries: [JournalEntry]
+
     @State private var path: [JournalEntry] = []
-    @State private var showingStylePicker = false
-    @State private var creatingFormat: JournalFormat?
+    @State private var selectedTab: HomeTab = .journal
+
+    // Sheets / flows.
+    @State private var showingStylePicker = false     // Quick write
+    @State private var showingAllEntries = false       // View all / History
+    @State private var showingActivities = false       // Start an activity
+    @State private var showingCompanion = false        // AI companion
+    @State private var showingNotifications = false     // bell
+    @State private var showingFocusEditor = false
+
+    @AppStorage(FocusAreas.storageKey) private var focusRaw = FocusAreas.encode(FocusAreas.defaults)
 
     var body: some View {
         NavigationStack(path: $path) {
-            list
-            .navigationTitle("Lilac")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showingStylePicker = true
-                    } label: {
-                        Label("New Entry", systemImage: "square.and.pencil")
+            ZStack {
+                LinearGradient(
+                    colors: [.homeBackgroundTop, .homeBackgroundBottom],
+                    startPoint: .top, endPoint: .bottom
+                )
+                .ignoresSafeArea()
+
+                Group {
+                    if selectedTab == .journal {
+                        home
+                    } else {
+                        HomeComingSoonView(
+                            title: "Meetings",
+                            systemImage: "person.2",
+                            message: "Share sessions with a therapist or a trusted circle. This space is on the way.",
+                            embedInStack: false
+                        )
                     }
                 }
             }
-            .navigationDestination(for: JournalEntry.self) { entry in
-                switch entry.format {
-                case .drawing?, .diagram?:
-                    DrawingJournalView(entry: entry)
-                case .photo?:
-                    PictureJournalView(entry: entry)
-                case .audio?:
-                    AudioJournalView(entry: entry)
-                default:
-                    EntryEditorView(entry: entry)
-                }
-            }
+            .navigationBarHidden(true)
+            .safeAreaInset(edge: .bottom) { tabBar }
+            .navigationDestination(for: JournalEntry.self) { journalDestination(for: $0) }
             .sheet(isPresented: $showingStylePicker) {
                 StylePickerView(onPick: newEntry)
             }
-            .sheet(item: $creatingFormat) { format in
-                ComingSoonEditor(format: format)
-            }
-        }
-    }
-
-    private var list: some View {
-        List {
-            Section {
-                DailyJournalCard(
-                    recommended: RecommendedPrompts.today(),
-                    onStart: startDailyJournal,
-                    onPick: startDailyJournal(with:)
+            .sheet(isPresented: $showingAllEntries) { AllEntriesView() }
+            .sheet(isPresented: $showingActivities) { ActivitiesSheet() }
+            .sheet(isPresented: $showingFocusEditor) { FocusEditorView(raw: $focusRaw) }
+            .sheet(isPresented: $showingCompanion) {
+                HomeComingSoonView(
+                    title: "AI companion",
+                    systemImage: "bubble.left.and.text.bubble.right",
+                    message: "A gentle, always-there listener that reflects your writing back to you. We're building it with care."
                 )
             }
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(Color.clear)
-
-            Section {
-                FormatGallery(onSelect: startFormat)
-            } header: {
-                Text("More ways to journal")
+            .sheet(isPresented: $showingNotifications) {
+                HomeComingSoonView(
+                    title: "Notifications",
+                    systemImage: "bell",
+                    message: "You're all caught up. Gentle reminders and nudges will land here."
+                )
             }
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(Color.clear)
+        }
+        .tint(.homeAccent)
+    }
 
-            Section {
-                RewindActivitySection()
-            } header: {
-                Text("Activities")
+    // MARK: Home content
+
+    private var home: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 26) {
+                header
+                dateBlock
+                PrimaryActionCard(
+                    icon: "pencil",
+                    title: "Start daily journal",
+                    action: startDailyJournal
+                )
+                todaysJournals
+                PrimaryActionCard(
+                    icon: "leaf",
+                    title: "Start an activity",
+                    action: { showingActivities = true }
+                )
+                focusSection
+                quickRow
+                HistoryButton { showingAllEntries = true }
             }
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(Color.clear)
+            .padding(.horizontal, 24)
+            .padding(.top, 8)
+            .padding(.bottom, 24)
+        }
+    }
 
-            if let onThisDay = onThisDayEntry {
-                Section {
-                    NavigationLink(value: onThisDay) {
-                        OnThisDayCard(entry: onThisDay)
-                    }
+    private var header: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(greeting)
+                    .font(.system(size: 40, design: .serif))
+                    .foregroundStyle(Color.homeAccentDeep)
+                Text("You're in the right place.")
+                    .font(.system(.body, design: .serif))
+                    .foregroundStyle(Color.homeSecondary)
+            }
+            Spacer(minLength: 8)
+            VStack {
+                Button {
+                    showingNotifications = true
+                } label: {
+                    Image(systemName: "bell")
+                        .font(.title3)
+                        .foregroundStyle(Color.homeAccentDeep)
                 }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
+                .accessibilityLabel("Notifications")
+                GlowOrbView(size: 78)
+                    .padding(.top, 4)
             }
+        }
+    }
 
-            if entries.isEmpty {
-                Section {
-                    Text("Your entries will appear here.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, 12)
-                }
-                .listRowBackground(Color.clear)
+    private var dateBlock: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(todayString)
+                .font(.system(.title3, design: .serif).weight(.medium))
+                .foregroundStyle(Color.homeAccentDeep)
+            Text("Take a moment for yourself today.")
+                .font(.subheadline)
+                .foregroundStyle(Color.homeSecondary)
+        }
+    }
+
+    private var todaysJournals: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(title: "Today's journals", action: "View all") {
+                showingAllEntries = true
+            }
+            if todaysEntries.isEmpty {
+                Text("Nothing yet today — start above whenever you're ready.")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.homeSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(18)
+                    .homeCardBackground()
             } else {
-                Section("Entries") {
-                    ForEach(entries) { entry in
-                        NavigationLink(value: entry) {
-                            EntryRow(entry: entry)
+                VStack(spacing: 0) {
+                    ForEach(Array(todaysEntries.enumerated()), id: \.element.id) { index, entry in
+                        if index > 0 {
+                            Divider().overlay(Color.homeHairline).padding(.leading, 60)
                         }
+                        NavigationLink(value: entry) {
+                            TodayJournalRow(entry: entry)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .onDelete(perform: delete)
+                }
+                .homeCardBackground()
+            }
+        }
+    }
+
+    private var focusSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(title: "Your current focus", action: "Edit") {
+                showingFocusEditor = true
+            }
+            FlowLayout(spacing: 10) {
+                ForEach(focusAreas, id: \.self) { focus in
+                    FocusChip(text: focus)
                 }
             }
         }
-        .listStyle(.insetGrouped)
     }
 
-    /// Finds a past entry from a previous week/month to resurface for
-    /// periodic re-reading, checking a handful of fixed day-offsets.
-    private var onThisDayEntry: JournalEntry? {
-        let calendar = Calendar.current
-        let today = Date()
-        let dayOffsets = [7, 14, 21, 30, 60, 90]
-        for offset in dayOffsets {
-            guard let target = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
-            if let match = entries.first(where: { calendar.isDate($0.createdAt, inSameDayAs: target) }) {
-                return match
+    private var quickRow: some View {
+        HStack(spacing: 14) {
+            SmallActionButton(icon: "pencil", title: "Quick write") {
+                showingStylePicker = true
+            }
+            SmallActionButton(icon: "bubble.left.and.text.bubble.right", title: "AI companion") {
+                showingCompanion = true
             }
         }
-        return nil
     }
 
-    /// The daily reminder's primary action: start today's journal as a free-flow
-    /// check-in, seeded instantly then upgraded to a generated prompt.
+    private var tabBar: some View {
+        HStack(spacing: 0) {
+            TabBarItem(icon: "book", title: "Journal", isSelected: selectedTab == .journal) {
+                selectedTab = .journal
+            }
+            TabBarItem(icon: "person.2", title: "Meetings", isSelected: selectedTab == .meetings) {
+                selectedTab = .meetings
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+        .background(
+            Capsule().fill(Color.homeCard)
+                .shadow(color: Color.homeAccent.opacity(0.14), radius: 14, x: 0, y: 4)
+        )
+        .overlay(Capsule().stroke(Color.homeHairline, lineWidth: 1))
+        .padding(.horizontal, 40)
+        .padding(.bottom, 6)
+    }
+
+    // MARK: Dynamic values
+
+    private var greeting: String {
+        switch Calendar.current.component(.hour, from: .now) {
+        case 5..<12: return "Good morning"
+        case 12..<17: return "Good afternoon"
+        default: return "Good evening"
+        }
+    }
+
+    private var todayString: String {
+        Date().formatted(.dateTime.weekday(.wide).month(.wide).day())
+    }
+
+    private var todaysEntries: [JournalEntry] {
+        entries.filter { Calendar.current.isDateInToday($0.createdAt) }
+    }
+
+    private var focusAreas: [String] {
+        FocusAreas.decode(focusRaw)
+    }
+
+    // MARK: Actions
+
+    /// The primary CTA: start today's journal as a free-flow check-in, seeded
+    /// instantly then upgraded to a generated prompt.
     private func startDailyJournal() {
         newEntry(style: .freeFlow, sessionLength: .quick)
-    }
-
-    /// Create-gallery routing: the drawing formats open a real entry in the
-    /// sketch editor; the rest still show their `ComingSoonEditor` placeholder.
-    private func startFormat(_ format: JournalFormat) {
-        switch format {
-        case .drawing, .diagram, .photo, .audio:
-            let entry = JournalEntry(prompt: "", format: format)
-            context.insert(entry)
-            path.append(entry)
-        case .log:
-            creatingFormat = format
-        }
-    }
-
-    /// Start a journal from a chosen recommended prompt. Uses the prompt exactly
-    /// as picked — no AI upgrade — since the writer selected this one on purpose.
-    private func startDailyJournal(with recommended: RecommendedPrompt) {
-        let entry = JournalEntry(
-            prompt: recommended.text,
-            style: recommended.style,
-            sessionLength: .quick
-        )
-        context.insert(entry)
-        path.append(entry)
     }
 
     private func newEntry(style: JournalStyle, sessionLength: SessionLength) {
         // Seed instantly from the curated bank so navigation never waits on the
         // network, then upgrade to a freshly generated prompt in the background.
-        // If the engine is offline the seed simply stays.
         let seeded = PromptBank.random(for: style)
         let entry = JournalEntry(
             prompt: seeded,
@@ -170,159 +257,312 @@ struct EntryListView: View {
             entry.prompt = generated
         }
     }
-
-    private func delete(at offsets: IndexSet) {
-        for index in offsets {
-            context.delete(entries[index])
-        }
-    }
 }
 
-/// The home screen's hero: a standing reminder to journal today. Tapping the
-/// body starts today's entry; the dropdown offers recommended prompts to start
-/// from instead. The recommendations are curated for now and will later be
-/// driven by therapy sessions and other AI analyzers.
-private struct DailyJournalCard: View {
-    let recommended: [RecommendedPrompt]
-    let onStart: () -> Void
-    let onPick: (RecommendedPrompt) -> Void
+private enum HomeTab { case journal, meetings }
 
-    private var today: String {
-        Date().formatted(.dateTime.weekday(.wide).month().day())
-    }
+// MARK: - Home components
+
+/// The big lavender call-to-action cards ("Start daily journal", "Start an
+/// activity"): a white icon disc, a serif title, and a trailing chevron disc.
+private struct PrimaryActionCard: View {
+    let icon: String
+    let title: String
+    let action: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            Button(action: onStart) {
-                HStack(spacing: 14) {
-                    Image(systemName: "leaf")
-                        .font(.title2)
-                        .foregroundStyle(Color.lilac)
-                        .frame(width: 28)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Daily journal")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-                        Text(today)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "square.and.pencil")
+        Button(action: action) {
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle().fill(Color.white).frame(width: 52, height: 52)
+                        .shadow(color: Color.homeAccent.opacity(0.12), radius: 6, x: 0, y: 2)
+                    Image(systemName: icon)
                         .font(.title3)
-                        .foregroundStyle(Color.lilac)
+                        .foregroundStyle(Color.homeAccent)
                 }
-                .padding(16)
-                .contentShape(Rectangle())
+                Text(title)
+                    .font(.system(.title3, design: .serif).weight(.medium))
+                    .foregroundStyle(Color.homeAccentDeep)
+                Spacer(minLength: 8)
+                ChevronDisc()
             }
-            .buttonStyle(.plain)
-
-            if !recommended.isEmpty {
-                Divider().overlay(Color.lilac.opacity(0.25))
-
-                Menu {
-                    ForEach(recommended) { prompt in
-                        Button {
-                            onPick(prompt)
-                        } label: {
-                            Label(prompt.text, systemImage: prompt.style.icon)
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "sparkles")
-                        Text("Recommended prompts")
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.down")
-                            .font(.caption.weight(.semibold))
-                    }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Color.lilac)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .contentShape(Rectangle())
-                }
-            }
+            .padding(18)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 22)
+                    .fill(Color.homeTint)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 22))
         }
-        .background(Color.lilacSoft, in: RoundedRectangle(cornerRadius: 16))
+        .buttonStyle(.plain)
     }
 }
 
-/// A single row: the prompt, the date, and a thumbnail of the handwriting.
-private struct EntryRow: View {
+/// A section title with a trailing text action ("View all", "Edit").
+private struct SectionHeader: View {
+    let title: String
+    let action: String
+    let onTap: () -> Void
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(.title3, design: .serif))
+                .foregroundStyle(Color.homeAccentDeep)
+            Spacer()
+            Button(action: onTap) {
+                Text(action)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.homeAccent)
+            }
+        }
+    }
+}
+
+/// One row in "Today's journals": a soft icon disc (sun for day, moon for
+/// evening, or the format's own glyph), a title, and the time it was written.
+private struct TodayJournalRow: View {
     let entry: JournalEntry
 
-    private var thumbnail: UIImage? {
-        guard let drawing = try? PKDrawing(data: entry.drawingData),
-              !drawing.bounds.isEmpty else { return nil }
-        return drawing.image(from: drawing.bounds, scale: 1)
+    private var hour: Int { Calendar.current.component(.hour, from: entry.createdAt) }
+
+    private var iconName: String {
+        if let format = entry.format { return format.icon }
+        return hour >= 17 || hour < 5 ? "moon" : "sun.max"
     }
 
-    /// Prefer the prompt, then any written/transcribed text, then the format's
-    /// name — so audio and picture entries read as more than just "Audio".
     private var title: String {
-        if !entry.prompt.isEmpty { return entry.prompt }
-        if let text = entry.text, !text.isEmpty { return text }
-        return entry.format?.title ?? "Untitled"
+        if let format = entry.format { return "\(format.title) Journal" }
+        switch hour {
+        case 5..<12: return "Morning Journal"
+        case 12..<17: return "Afternoon Journal"
+        default: return "Evening Journal"
+        }
     }
 
     var body: some View {
         HStack(spacing: 14) {
-            Image(systemName: entry.format?.icon ?? entry.style.icon)
-                .font(.subheadline)
-                .foregroundStyle(Color.lilac)
-                .frame(width: 20)
-            VStack(alignment: .leading, spacing: 4) {
+            ZStack {
+                Circle().fill(Color.homeTint).frame(width: 40, height: 40)
+                Image(systemName: iconName)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.homeAccent)
+            }
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.body.weight(.medium))
-                    .lineLimit(2)
-                Text(entry.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.system(.body, design: .serif).weight(.medium))
+                    .foregroundStyle(Color.homeAccentDeep)
+                Text(entry.createdAt.formatted(date: .omitted, time: .shortened))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.homeSecondary)
             }
             Spacer()
-            if let thumbnail {
-                Image(uiImage: thumbnail)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 56, height: 56)
-                    .background(Color.lilacSoft, in: RoundedRectangle(cornerRadius: 8))
-            }
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(Color.homeSecondary.opacity(0.6))
         }
-        .padding(.vertical, 4)
+        .padding(16)
+        .contentShape(Rectangle())
     }
 }
 
-/// A card surfacing a past entry for periodic re-reading, e.g. "1 week ago".
-private struct OnThisDayCard: View {
-    let entry: JournalEntry
-
-    private var relativeLabel: String {
-        let days = Calendar.current.dateComponents([.day], from: entry.createdAt, to: .now).day ?? 0
-        if days >= 60 { return "\(days / 30) months ago" }
-        if days >= 14 { return "\(days / 7) weeks ago" }
-        if days >= 7 { return "1 week ago" }
-        return "\(days) days ago"
-    }
+/// A single "current focus" pill.
+private struct FocusChip: View {
+    let text: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "clock.arrow.circlepath")
-                .font(.title3)
-                .foregroundStyle(Color.lilac)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("On this day · \(relativeLabel)")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.lilac)
-                    .textCase(.uppercase)
-                Text(entry.prompt)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-            }
-            Spacer(minLength: 0)
+        HStack(spacing: 6) {
+            Image(systemName: FocusAreas.icon(for: text))
+                .font(.caption)
+                .foregroundStyle(Color.homeAccent)
+            Text(text)
+                .font(.footnote)
+                .foregroundStyle(Color.homeSecondary)
         }
-        .padding(14)
-        .background(Color.lilacSoft.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .background(
+            Capsule().fill(Color.homeCard)
+                .overlay(Capsule().stroke(Color.homeHairline, lineWidth: 1))
+        )
+    }
+}
+
+/// The paired white buttons ("Quick write", "AI companion").
+private struct SmallActionButton: View {
+    let icon: String
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle().fill(Color.homeTint).frame(width: 38, height: 38)
+                    Image(systemName: icon)
+                        .font(.subheadline)
+                        .foregroundStyle(Color.homeAccent)
+                }
+                Text(title)
+                    .font(.system(.subheadline, design: .serif).weight(.medium))
+                    .foregroundStyle(Color.homeAccentDeep)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.homeSecondary.opacity(0.6))
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity)
+            .homeCardBackground()
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// The full-width "History" button.
+private struct HistoryButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle().fill(Color.homeTint).frame(width: 44, height: 44)
+                    Image(systemName: "book")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.homeAccent)
+                }
+                Text("History")
+                    .font(.system(.body, design: .serif).weight(.medium))
+                    .foregroundStyle(Color.homeAccentDeep)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Color.homeSecondary.opacity(0.6))
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity)
+            .homeCardBackground()
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// A small chevron inside a faint disc, used on the primary cards.
+private struct ChevronDisc: View {
+    var body: some View {
+        ZStack {
+            Circle().fill(Color.homeAccent.opacity(0.14)).frame(width: 34, height: 34)
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(Color.homeAccent)
+        }
+    }
+}
+
+/// One item in the bottom tab bar.
+private struct TabBarItem: View {
+    let icon: String
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                HStack(spacing: 8) {
+                    Image(systemName: icon)
+                    Text(title)
+                        .font(.system(.subheadline, design: .serif))
+                }
+                .foregroundStyle(isSelected ? Color.homeAccent : Color.homeSecondary)
+                Rectangle()
+                    .fill(isSelected ? Color.homeAccent : .clear)
+                    .frame(width: 26, height: 2)
+                    .clipShape(Capsule())
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Shared modifiers & layout
+
+private extension View {
+    /// The standard white home card: rounded, hairline-bordered, softly shadowed.
+    func homeCardBackground() -> some View {
+        background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(Color.homeCard)
+                .shadow(color: Color.homeAccent.opacity(0.10), radius: 12, x: 0, y: 4)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(Color.homeHairline.opacity(0.7), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Activities sheet
+
+/// Opened from "Start an activity": the Rewind resurfacing activity plus the
+/// other ways to journal (drawing, photo, audio, …).
+private struct ActivitiesSheet: View {
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
+    @State private var path: [JournalEntry] = []
+    @State private var creatingFormat: JournalFormat?
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    Text("Reflect")
+                        .font(.system(.title3, design: .serif))
+                        .foregroundStyle(Color.homeAccentDeep)
+                    RewindActivitySection()
+
+                    Text("More ways to journal")
+                        .font(.system(.title3, design: .serif))
+                        .foregroundStyle(Color.homeAccentDeep)
+                    FormatGallery(onSelect: create)
+                        .padding(.horizontal, -20)
+                }
+                .padding(20)
+            }
+            .background(
+                LinearGradient(
+                    colors: [.homeBackgroundTop, .homeBackgroundBottom],
+                    startPoint: .top, endPoint: .bottom
+                )
+                .ignoresSafeArea()
+            )
+            .navigationTitle("Activities")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: JournalEntry.self) { journalDestination(for: $0) }
+            .sheet(item: $creatingFormat) { ComingSoonEditor(format: $0) }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .tint(.homeAccent)
+    }
+
+    private func create(_ format: JournalFormat) {
+        switch format {
+        case .drawing, .diagram, .photo, .audio:
+            let entry = JournalEntry(prompt: "", format: format)
+            context.insert(entry)
+            path.append(entry)
+        case .log:
+            creatingFormat = format
+        }
     }
 }
