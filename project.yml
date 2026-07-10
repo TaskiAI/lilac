@@ -25,6 +25,8 @@ targets:
         # Audio journaling: record voice notes and transcribe them to text.
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "Lilac records your spoken journal entries."
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Lilac transcribes your recordings into text you can edit."
+        # App lock: unlock the journal with Face ID / Touch ID.
+        INFOPLIST_KEY_NSFaceIDUsageDescription: "Lilac uses Face ID to unlock your private journal."
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
