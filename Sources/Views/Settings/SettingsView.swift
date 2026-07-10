@@ -10,11 +10,13 @@ struct SettingsView: View {
     @State private var showResetConfirm = false
     @AppStorage(InsightEngine.enabledKey) private var insightsEnabled = true
     @AppStorage(WritingAssistant.enabledKey) private var assistEnabled = true
+    @AppStorage(FocusAreas.storageKey) private var focusRaw = FocusAreas.encode(FocusAreas.defaults)
 
     var body: some View {
         NavigationStack {
             List {
                 profileSection
+                personalizeSection
                 securitySection
                 privacySection
                 aboutSection
@@ -39,6 +41,10 @@ struct SettingsView: View {
                     ProfileEditView().environmentObject(auth)
                 case .passcode(let mode):
                     PasscodeFlowSheet(mode: mode).environmentObject(auth)
+                case .reminders:
+                    NotificationsView()
+                case .focus:
+                    FocusEditorView(raw: $focusRaw)
                 }
             }
             .confirmationDialog(
@@ -56,6 +62,18 @@ struct SettingsView: View {
     }
 
     // MARK: Sections
+
+    private var personalizeSection: some View {
+        Section("Personalize") {
+            Button { sheet = .reminders } label: {
+                Label("Reminders & nudges", systemImage: "bell")
+            }
+            Button { sheet = .focus } label: {
+                Label("Focus areas", systemImage: "scope")
+            }
+        }
+        .tint(.homeAccent)
+    }
 
     private var profileSection: some View {
         Section {
@@ -179,11 +197,15 @@ struct SettingsView: View {
 private enum SettingsSheet: Identifiable {
     case editProfile
     case passcode(PasscodeFlowSheet.Mode)
+    case reminders
+    case focus
 
     var id: String {
         switch self {
         case .editProfile: return "editProfile"
         case .passcode(let mode): return "passcode-\(mode)"
+        case .reminders: return "reminders"
+        case .focus: return "focus"
         }
     }
 }

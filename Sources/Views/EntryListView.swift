@@ -355,13 +355,13 @@ private struct DayColumn: View {
         entries.filter { calendar.isDate($0.createdAt, inSameDayAs: day) }
     }
 
-    private var moodFace: String? {
+    private var moodLevel: Int? {
         let logs = dayEntries.filter { $0.format == .log }
         if !logs.isEmpty {
             let avg = logs.map { Double($0.moodLog.mood) }.reduce(0, +) / Double(logs.count)
-            return MoodLog.moodFace(Int(avg.rounded()))
+            return Int(avg.rounded())
         }
-        return dayEntries.isEmpty ? nil : "🙂"
+        return dayEntries.isEmpty ? nil : 3
     }
 
     var body: some View {
@@ -376,10 +376,15 @@ private struct DayColumn: View {
                 .background {
                     if isToday { Circle().fill(Color.homeAccent) }
                 }
-            Text(moodFace ?? "")
-                .font(.system(size: 15))
-                .opacity(isFuture ? 0.25 : 1)
-                .frame(height: 16)
+            Group {
+                if let moodLevel {
+                    MoodFace(level: moodLevel, lineWidth: 1.4)
+                        .frame(width: 17, height: 17)
+                        .opacity(isFuture ? 0.25 : 1)
+                } else {
+                    Color.clear.frame(width: 17, height: 17)
+                }
+            }
             Circle()
                 .fill(dayEntries.isEmpty ? .clear : Color.homeAccent)
                 .frame(width: 4, height: 4)
@@ -402,15 +407,14 @@ private struct EntryLine: View {
         }
     }
 
-    private var face: String {
-        if entry.format == .log { return MoodLog.moodFace(entry.moodLog.mood) }
-        return "🙂"
+    private var moodLevel: Int {
+        entry.format == .log ? entry.moodLog.mood : 3
     }
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(face)
-                .font(.system(size: 16))
+            MoodFace(level: moodLevel)
+                .frame(width: 19, height: 19)
                 .frame(width: 36, height: 36)
                 .background(Circle().fill(Color.homeTint))
             VStack(alignment: .leading, spacing: 2) {

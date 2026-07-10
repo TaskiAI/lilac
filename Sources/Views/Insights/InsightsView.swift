@@ -36,6 +36,7 @@ struct InsightsView: View {
                     if !metrics.moodSeries.isEmpty { moodChart }
                     if !metrics.habitRates.isEmpty { habitChart }
                     narrative
+                    revisit
                     privacyFooter
                 }
                 .padding(24)
@@ -283,6 +284,17 @@ struct InsightsView: View {
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 14).fill(Color.homeTint))
+        }
+    }
+
+    /// Rewind — resurface a past entry to see change over time. Lives here in the
+    /// Journey tab.
+    private var revisit: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Revisit")
+                .font(.system(.headline, design: .serif))
+                .foregroundStyle(Color.homeAccentDeep)
+            RewindActivitySection()
         }
     }
 
