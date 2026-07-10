@@ -57,6 +57,36 @@ struct DeepSeekClient {
         return text
     }
 
+    /// A multi-turn completion: pass a full ordered transcript (system first,
+    /// then the alternating user/assistant turns). Used by the AI companion so
+    /// the model keeps the thread of the conversation. Throws on any failure.
+    func chat(messages: [ChatTurn], maxTokens: Int = 400) async throws -> String {
+        guard let apiKey, !apiKey.isEmpty else { throw ClientError.notConfigured }
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 30
+
+        let body = ChatRequest(
+            model: model,
+            maxTokens: maxTokens,
+            messages: messages.map { .init(role: $0.role, content: $0.content) }
+        )
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw ClientError.badResponse
+        }
+        let decoded = try JSONDecoder().decode(ChatResponse.self, from: data)
+        let text = decoded.choices.first?.message.content?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let text, !text.isEmpty else { throw ClientError.empty }
+        return text
+    }
+
     static func resolveAPIKey() -> String? {
         if let env = ProcessInfo.processInfo.environment["DEEPSEEK_API_KEY"], !env.isEmpty {
             return env
@@ -67,6 +97,12 @@ struct DeepSeekClient {
         }
         return nil
     }
+}
+
+/// One turn in a multi-turn chat: `role` is "system" | "user" | "assistant".
+struct ChatTurn {
+    let role: String
+    let content: String
 }
 
 // MARK: - Wire types (DeepSeek / OpenAI-compatible)

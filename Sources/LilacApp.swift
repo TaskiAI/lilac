@@ -12,7 +12,9 @@ struct LilacApp: App {
                 RewindCandidate.self,
                 RewindSession.self,
                 RewindSettings.self,
-                AICallLog.self
+                AICallLog.self,
+                CompanionMessage.self,
+                Meeting.self
             )
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")

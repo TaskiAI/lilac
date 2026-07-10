@@ -35,12 +35,7 @@ struct EntryListView: View {
                     if selectedTab == .journal {
                         home
                     } else {
-                        HomeComingSoonView(
-                            title: "Meetings",
-                            systemImage: "person.2",
-                            message: "Share sessions with a therapist or a trusted circle. This space is on the way.",
-                            embedInStack: false
-                        )
+                        MeetingsView()
                     }
                 }
             }
@@ -54,18 +49,10 @@ struct EntryListView: View {
             .sheet(isPresented: $showingActivities) { ActivitiesSheet() }
             .sheet(isPresented: $showingFocusEditor) { FocusEditorView(raw: $focusRaw) }
             .sheet(isPresented: $showingCompanion) {
-                HomeComingSoonView(
-                    title: "AI companion",
-                    systemImage: "bubble.left.and.text.bubble.right",
-                    message: "A gentle, always-there listener that reflects your writing back to you. We're building it with care."
-                )
+                CompanionView()
             }
             .sheet(isPresented: $showingNotifications) {
-                HomeComingSoonView(
-                    title: "Notifications",
-                    systemImage: "bell",
-                    message: "You're all caught up. Gentle reminders and nudges will land here."
-                )
+                NotificationsView(onStartJournal: startDailyJournal)
             }
         }
         .tint(.homeAccent)
