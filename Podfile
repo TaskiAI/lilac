@@ -19,4 +19,15 @@ platform :ios, '17.0'
 target 'Lilac' do
   use_frameworks!
   pod 'GoogleMLKit/DigitalInkRecognition'
+
+  # OPTIONAL — "Sign in with Google" on the account screen.
+  # The button + `GoogleSignInCoordinator` are guarded by
+  # `#if canImport(GoogleSignIn)`, so the app builds and runs without this.
+  # To enable it:
+  #   1. Uncomment the pod below and run `pod install`.
+  #   2. Create an iOS OAuth client in Google Cloud Console.
+  #   3. Add `GIDClientID` (your client ID) to the app's Info.plist, and a URL
+  #      scheme equal to your REVERSED client ID.
+  # Until then the Google button shows a "needs setup" prompt.
+  # pod 'GoogleSignIn'
 end

@@ -19,11 +19,26 @@ final class AuthManager: ObservableObject {
 
     @Published private(set) var phase: Phase = .launching
 
+    /// How the local account was established.
+    enum AuthProvider: String {
+        case local, apple, google
+
+        var label: String {
+            switch self {
+            case .local: return "Passcode"
+            case .apple: return "Apple"
+            case .google: return "Google"
+            }
+        }
+    }
+
     private let defaults = UserDefaults.standard
     private enum Key {
         static let name = "account.name"
         static let email = "account.email"
         static let createdAt = "account.createdAt"
+        static let provider = "account.provider"
+        static let providerID = "account.providerID"
         static let lockEnabled = "lock.enabled"
         static let biometricsEnabled = "lock.biometricsEnabled"
         static let passcode = "com.lilac.passcode"   // Keychain account
@@ -37,6 +52,10 @@ final class AuthManager: ObservableObject {
     var hasAccount: Bool { defaults.object(forKey: Key.createdAt) != nil }
     var lockEnabled: Bool { defaults.bool(forKey: Key.lockEnabled) }
     var biometricsEnabled: Bool { defaults.bool(forKey: Key.biometricsEnabled) }
+    var createdAt: Date { defaults.object(forKey: Key.createdAt) as? Date ?? .now }
+    var provider: AuthProvider {
+        AuthProvider(rawValue: defaults.string(forKey: Key.provider) ?? "") ?? .local
+    }
 
     /// Decide the initial phase once the splash has shown.
     func bootstrap() {
@@ -56,6 +75,7 @@ final class AuthManager: ObservableObject {
         defaults.set(name.trimmingCharacters(in: .whitespaces), forKey: Key.name)
         defaults.set(email.trimmingCharacters(in: .whitespaces), forKey: Key.email)
         defaults.set(Date(), forKey: Key.createdAt)
+        defaults.set(AuthProvider.local.rawValue, forKey: Key.provider)
 
         if let passcode, !passcode.isEmpty {
             storePasscode(passcode)
@@ -66,6 +86,71 @@ final class AuthManager: ObservableObject {
             defaults.set(false, forKey: Key.biometricsEnabled)
         }
         phase = .unlocked
+    }
+
+    /// Sign in (or up) with Apple / Google. Since there's no backend, the
+    /// provider identity just seeds the local account. Name/email are only
+    /// filled if the provider supplies them (Apple gives them once) and any
+    /// previously stored values are preserved otherwise. Lock stays off until
+    /// the writer sets a passcode in Settings.
+    func signIn(with provider: AuthProvider, id: String, name: String?, email: String?) {
+        if let name, !name.isEmpty { defaults.set(name, forKey: Key.name) }
+        if let email, !email.isEmpty { defaults.set(email, forKey: Key.email) }
+        defaults.set(provider.rawValue, forKey: Key.provider)
+        defaults.set(id, forKey: Key.providerID)
+        if !hasAccount {
+            defaults.set(Date(), forKey: Key.createdAt)
+            defaults.set(false, forKey: Key.lockEnabled)
+            defaults.set(false, forKey: Key.biometricsEnabled)
+        }
+        phase = .unlocked
+    }
+
+    // MARK: Profile & security settings
+
+    func updateProfile(name: String, email: String) {
+        defaults.set(name.trimmingCharacters(in: .whitespaces), forKey: Key.name)
+        defaults.set(email.trimmingCharacters(in: .whitespaces), forKey: Key.email)
+        objectWillChange.send()
+    }
+
+    /// Turn on the passcode lock (from Settings). Returns nothing — always succeeds.
+    func enablePasscode(_ code: String, useBiometrics: Bool) {
+        storePasscode(code)
+        defaults.set(true, forKey: Key.lockEnabled)
+        defaults.set(useBiometrics && biometryAvailable, forKey: Key.biometricsEnabled)
+        objectWillChange.send()
+    }
+
+    /// Change the passcode; requires the current one. Returns whether it changed.
+    @discardableResult
+    func changePasscode(current: String, new: String) -> Bool {
+        guard verifyPasscode(current) else { return false }
+        storePasscode(new)
+        objectWillChange.send()
+        return true
+    }
+
+    /// Turn off the passcode lock; requires the current passcode.
+    @discardableResult
+    func disablePasscode(current: String) -> Bool {
+        guard verifyPasscode(current) else { return false }
+        Keychain.delete(Key.passcode)
+        Keychain.delete(Key.salt)
+        defaults.set(false, forKey: Key.lockEnabled)
+        defaults.set(false, forKey: Key.biometricsEnabled)
+        objectWillChange.send()
+        return true
+    }
+
+    func setBiometricsEnabled(_ enabled: Bool) {
+        defaults.set(enabled && biometryAvailable && lockEnabled, forKey: Key.biometricsEnabled)
+        objectWillChange.send()
+    }
+
+    /// Manually engage the lock now (Settings "Lock now"). No-op if no passcode.
+    func lockNow() {
+        if lockEnabled { phase = .locked }
     }
 
     // MARK: Locking / unlocking

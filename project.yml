@@ -9,6 +9,16 @@ targets:
     platform: iOS
     sources:
       - path: Sources
+    # Sign in with Apple. NOTE: this capability must also be enabled for the
+    # app's App ID on your Apple Developer account, or code-signing will fail.
+    # If you don't have it provisioned yet, remove this `entitlements` block and
+    # the Apple button degrades to an error at runtime instead of breaking the
+    # build.
+    entitlements:
+      path: Lilac.entitlements
+      properties:
+        com.apple.developer.applesignin:
+          - Default
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.lilac.journal

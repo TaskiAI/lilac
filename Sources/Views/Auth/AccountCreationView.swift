@@ -63,6 +63,16 @@ struct AccountCreationView: View {
                     .foregroundStyle(Color.homeSecondary)
             }
 
+            SocialSignInButtons()
+
+            HStack(spacing: 12) {
+                Rectangle().fill(Color.homeHairline).frame(height: 1)
+                Text("or")
+                    .font(.footnote)
+                    .foregroundStyle(Color.homeSecondary)
+                Rectangle().fill(Color.homeHairline).frame(height: 1)
+            }
+
             VStack(spacing: 12) {
                 AuthField(title: "Your name", text: $name)
                     .textContentType(.givenName)

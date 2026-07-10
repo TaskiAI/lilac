@@ -7,6 +7,7 @@ import PencilKit
 /// journal, start an activity, quick-write, and browse history.
 struct EntryListView: View {
     @Environment(\.modelContext) private var context
+    @EnvironmentObject private var auth: AuthManager
     @Query(sort: \JournalEntry.createdAt, order: .reverse) private var entries: [JournalEntry]
 
     @State private var path: [JournalEntry] = []
@@ -19,6 +20,7 @@ struct EntryListView: View {
     @State private var showingCompanion = false        // AI companion
     @State private var showingNotifications = false     // bell
     @State private var showingFocusEditor = false
+    @State private var showingSettings = false          // gear
 
     @AppStorage(FocusAreas.storageKey) private var focusRaw = FocusAreas.encode(FocusAreas.defaults)
 
@@ -53,6 +55,9 @@ struct EntryListView: View {
             }
             .sheet(isPresented: $showingNotifications) {
                 NotificationsView(onStartJournal: startDailyJournal)
+            }
+            .sheet(isPresented: $showingSettings) {
+                SettingsView().environmentObject(auth)
             }
         }
         .tint(.homeAccent)
@@ -97,15 +102,25 @@ struct EntryListView: View {
                     .foregroundStyle(Color.homeSecondary)
             }
             Spacer(minLength: 8)
-            VStack {
-                Button {
-                    showingNotifications = true
-                } label: {
-                    Image(systemName: "bell")
-                        .font(.title3)
-                        .foregroundStyle(Color.homeAccentDeep)
+            VStack(alignment: .trailing) {
+                HStack(spacing: 18) {
+                    Button {
+                        showingSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .font(.title3)
+                            .foregroundStyle(Color.homeAccentDeep)
+                    }
+                    .accessibilityLabel("Settings")
+                    Button {
+                        showingNotifications = true
+                    } label: {
+                        Image(systemName: "bell")
+                            .font(.title3)
+                            .foregroundStyle(Color.homeAccentDeep)
+                    }
+                    .accessibilityLabel("Notifications")
                 }
-                .accessibilityLabel("Notifications")
                 GlowOrbView(size: 78)
                     .padding(.top, 4)
             }
