@@ -13,6 +13,7 @@ struct EntryListView: View {
     @State private var selectedTab: HomeTab = .home
     @State private var showingSettings = false
     @State private var showingGoals = false
+    @State private var showingCreate = false
     @State private var promptQuestion = ""
 
     @AppStorage(Goals.storageKey) private var goalsRaw = Goals.encode(Goals.defaults)
@@ -33,6 +34,9 @@ struct EntryListView: View {
             .navigationDestination(for: JournalEntry.self) { journalDestination(for: $0) }
             .sheet(isPresented: $showingSettings) { SettingsView().environmentObject(auth) }
             .sheet(isPresented: $showingGoals) { GoalsEditorView(raw: $goalsRaw) }
+            .sheet(isPresented: $showingCreate) {
+                CreateSheet(onWriting: createWriting, onFormat: createFormat)
+            }
             .onAppear { if promptQuestion.isEmpty { promptQuestion = Self.seededQuestion() } }
         }
         .tint(.homeAccent)
@@ -91,7 +95,7 @@ struct EntryListView: View {
         TabBar4(selected: $selectedTab)
             .overlay(alignment: .top) {
                 if selectedTab == .home {
-                    FloatingOrb { startPromptedEntry(promptQuestion) }
+                    FloatingOrb { showingCreate = true }
                         .offset(y: -30)
                 }
             }
@@ -122,13 +126,27 @@ struct EntryListView: View {
     // MARK: Actions
 
     /// Start (or open) a writing entry. Pass `existing` to open one; otherwise a
-    /// new entry is created from `prompt` (may be nil for a blank page).
+    /// new free-flow entry is created from `prompt` (may be nil for a blank page).
     private func startPromptedEntry(_ prompt: String?, existing: JournalEntry? = nil) {
         if let existing {
             path.append(existing)
             return
         }
-        let entry = JournalEntry(prompt: prompt ?? "", style: .freeFlow, sessionLength: .quick)
+        createWriting(prompt, .freeFlow)
+    }
+
+    /// Create a writing entry with a chosen prompt + style (from the Create sheet).
+    private func createWriting(_ prompt: String?, _ style: JournalStyle) {
+        showingCreate = false
+        let entry = JournalEntry(prompt: prompt ?? "", style: style, sessionLength: .quick)
+        context.insert(entry)
+        path.append(entry)
+    }
+
+    /// Create a non-writing format entry (audio, drawing, diagram, picture, log).
+    private func createFormat(_ format: JournalFormat) {
+        showingCreate = false
+        let entry = JournalEntry(prompt: "", format: format)
         context.insert(entry)
         path.append(entry)
     }
