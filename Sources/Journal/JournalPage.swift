@@ -27,10 +27,17 @@ struct JournalPage<Accessory: View>: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(WritingAssistant.enabledKey) private var assistEnabled = true
     @State private var lineSpacing: CGFloat
     @State private var headerHeight: CGFloat = 0
     @State private var scrollOffset: CGFloat = 0
     @State private var showTranscript = false
+
+    // Writing assistant (idle / blank-page nudges)
+    @State private var activityTick = 0
+    @State private var assistSuggestions: [String] = []
+    @State private var showAssist = false
+    @State private var isFetchingAssist = false
 
     private var titleBinding: Binding<String> {
         Binding(
@@ -61,6 +68,61 @@ struct JournalPage<Accessory: View>: View {
         min(0, -(scrollOffset + headerHeight))
     }
 
+    private var hasInk: Bool {
+        !loadedDrawing.bounds.isEmpty
+    }
+
+    // MARK: Writing assistant
+
+    /// Any writing/editing activity: hide a shown panel and restart the idle
+    /// timer (bumping `activityTick` re-triggers the `.task(id:)`).
+    private func noteActivity() {
+        if showAssist { withAnimation { showAssist = false } }
+        activityTick += 1
+    }
+
+    private func dismissAssist() {
+        withAnimation { showAssist = false }
+    }
+
+    /// Wait out the idle window, then offer nudges. Restarts on every activity
+    /// (via `.task(id: activityTick)`); the blank page gets help sooner than a
+    /// page you've paused on mid-writing.
+    @MainActor
+    private func runIdleTimer() async {
+        guard assistEnabled, !showAssist else { return }
+        let seconds: UInt64 = hasInk ? 20 : 8
+        try? await Task.sleep(nanoseconds: seconds * 1_000_000_000)
+        if Task.isCancelled { return }
+        await offerAssist()
+    }
+
+    @MainActor
+    private func offerAssist() async {
+        guard assistEnabled, !isFetchingAssist else { return }
+        isFetchingAssist = true
+        defer { isFetchingAssist = false }
+
+        // The words so far — prefer a fresh transcript, else recognize the ink now.
+        let ink: String
+        if entry.hasFreshTranscript, let transcript = entry.transcript {
+            ink = transcript
+        } else {
+            ink = await HandwritingTextExtractor.text(from: entry.drawingData)
+        }
+        if Task.isCancelled { return }
+
+        var parts: [String] = []
+        if let text = entry.text, !text.isEmpty { parts.append(text) }
+        if !ink.isEmpty { parts.append(ink) }
+        let current = parts.joined(separator: "\n")
+
+        let suggestions = await WritingAssistant.suggestions(prompt: entry.prompt, currentText: current)
+        if Task.isCancelled || suggestions.isEmpty { return }
+        assistSuggestions = suggestions
+        withAnimation { showAssist = true }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
@@ -71,7 +133,10 @@ struct JournalPage<Accessory: View>: View {
                     rule: UIColor(theme.rule),
                     margin: UIColor(theme.margin),
                     topInset: headerHeight,
-                    onChange: { entry.drawingData = $0.dataRepresentation() },
+                    onChange: { drawing in
+                        entry.drawingData = drawing.dataRepresentation()
+                        noteActivity()
+                    },
                     onScroll: { scrollOffset = $0 }
                 )
 
@@ -80,9 +145,21 @@ struct JournalPage<Accessory: View>: View {
                     .offset(y: headerTranslation)
             }
 
+            if showAssist {
+                WritingAssistPanel(
+                    theme: theme,
+                    suggestions: assistSuggestions,
+                    onPick: { _ in dismissAssist() },
+                    onDismiss: dismissAssist
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             spacingControl
         }
         .background(theme.paper)
+        .task(id: activityTick) { await runIdleTimer() }
+        .onChange(of: entry.title) { _, _ in noteActivity() }
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(theme.paper, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)

@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var sheet: SettingsSheet?
     @State private var showResetConfirm = false
     @AppStorage(InsightEngine.enabledKey) private var insightsEnabled = true
+    @AppStorage(WritingAssistant.enabledKey) private var assistEnabled = true
 
     var body: some View {
         NavigationStack {
@@ -128,10 +129,14 @@ struct SettingsView: View {
                 Label("AI insights", systemImage: "sparkles")
             }
             .tint(.homeAccent)
+            Toggle(isOn: $assistEnabled) {
+                Label("Writing help", systemImage: "hand.point.up.left")
+            }
+            .tint(.homeAccent)
         } header: {
             Text("Privacy")
         } footer: {
-            Text("When on, Lilac sends a summary of recent entries to DeepSeek to generate insights. Off keeps everything on-device (you still get local trends).")
+            Text("Insights sends a summary of recent entries to DeepSeek. Writing help sends the current entry when you pause, to suggest directions. Both off keep everything on-device.")
         }
     }
 
