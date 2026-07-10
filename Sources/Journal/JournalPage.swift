@@ -2,6 +2,10 @@ import SwiftUI
 import SwiftData
 import PencilKit
 
+// Note: `JournalPage` hosts the transcript affordance because it is the writing
+// surface (free diary + prompted). Sketch/photo/audio/log formats use their own
+// screens and aren't handwriting, so they don't transcribe.
+
 /// The reusable writing surface every journaling type is built on: the day's
 /// date, an optional `accessory` (a prompt, a mood, anything a type adds above
 /// the page), a ruled page you write on, and a slider that tightens the lines.
@@ -21,9 +25,11 @@ struct JournalPage<Accessory: View>: View {
     var theme: JournalTheme
     @ViewBuilder var accessory: () -> Accessory
 
+    @Environment(\.modelContext) private var context
     @State private var lineSpacing: CGFloat
     @State private var headerHeight: CGFloat = 0
     @State private var scrollOffset: CGFloat = 0
+    @State private var showTranscript = false
 
     init(
         entry: JournalEntry,
@@ -73,6 +79,28 @@ struct JournalPage<Accessory: View>: View {
         .toolbarBackground(theme.paper, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .tint(theme.ink)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showTranscript = true
+                } label: {
+                    Image(systemName: "text.magnifyingglass")
+                }
+                .accessibilityLabel("Transcript")
+            }
+        }
+        .sheet(isPresented: $showTranscript) {
+            TranscriptView(entry: entry)
+        }
+        .onDisappear {
+            // Transcribe fresh writing as soon as the page closes, so the words
+            // are ready for search and the AI tools without waiting for launch.
+            guard entry.needsTranscription else { return }
+            let context = context
+            Task { @MainActor [entry] in
+                await TranscriptionEngine(context: context).transcribe(entry)
+            }
+        }
     }
 
     private var header: some View {

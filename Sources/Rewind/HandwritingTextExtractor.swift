@@ -55,13 +55,21 @@ enum HandwritingTextExtractor {
 
 extension JournalEntry {
     /// The text used to classify this entry: the prompt (context), any typed or
-    /// transcribed text, and recognized handwriting. May be empty/partial for a
+    /// transcribed text, and recognized handwriting. Prefers the persisted
+    /// transcript (fast, consistent) and only re-recognizes the ink when the
+    /// stored transcript is missing or stale. May be empty/partial for a
     /// handwritten entry whose ink didn't recognize.
     func classifiableText() async -> String {
         var parts: [String] = []
         if !prompt.isEmpty { parts.append("Prompt: \(prompt)") }
         if let text, !text.isEmpty { parts.append(text) }
-        let ink = await HandwritingTextExtractor.text(from: drawingData)
+
+        let ink: String
+        if hasFreshTranscript, let transcript, !transcript.isEmpty {
+            ink = transcript
+        } else {
+            ink = await HandwritingTextExtractor.text(from: drawingData)
+        }
         if !ink.isEmpty { parts.append(ink) }
         return parts.joined(separator: "\n")
     }

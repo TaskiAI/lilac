@@ -55,10 +55,12 @@ private struct RootView: View {
                     .tint(.lilac)
                     .environmentObject(auth)
                     .task {
-                        // The local stand-in for the scheduled backend job:
-                        // classify pending entries and refresh candidates, then
-                        // refresh insights if they've gone stale (both gated on
-                        // their own privacy settings).
+                        // Keep handwriting transcripts current first, so the tools
+                        // below read real words. Then the local stand-in for the
+                        // scheduled backend job: classify entries and refresh
+                        // candidates, then refresh insights if they've gone stale
+                        // (both gated on their own privacy settings).
+                        await TranscriptionEngine(context: container.mainContext).run()
                         await RewindEngine(context: container.mainContext).run()
                         let insights = InsightEngine(context: container.mainContext)
                         if insights.isEnabled, insights.isStale() {

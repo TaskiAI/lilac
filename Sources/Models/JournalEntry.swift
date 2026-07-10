@@ -40,6 +40,20 @@ final class JournalEntry {
     /// `moodLog`; nil for every other format.
     private var logData: Data?
 
+    // MARK: Handwriting transcript (on-device recognition, persisted)
+
+    /// The recognized text of this entry's handwriting (Google ML Kit / Apple
+    /// Vision, on-device), persisted so the writer can read it and every AI tool
+    /// can use it without re-recognizing. nil until transcribed; "" when nothing
+    /// legible was found.
+    var transcript: String? = nil
+    /// When the transcript was generated.
+    var transcriptGeneratedAt: Date? = nil
+    /// The `drawingData` byte length captured at transcription time — a cheap
+    /// staleness signature. When the current length differs, the ink changed and
+    /// the transcript is regenerated.
+    var transcriptByteCount: Int? = nil
+
     // MARK: Rewind metadata (all optional/relationship — migration-safe)
 
     /// Theme tags for the Rewind feature, JSON-encoded; read/written via `themeTags`.
