@@ -14,15 +14,29 @@ struct CompanionView: View {
 
     @State private var draft = ""
     @State private var isThinking = false
+    @State private var search = ""
     @FocusState private var inputFocused: Bool
+
+    private var isSearching: Bool {
+        !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var searchMatches: [CompanionMessage] {
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return messages.filter { $0.text.lowercased().contains(query) }
+    }
 
     private let engine = CompanionEngine()
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                transcript
-                inputBar
+                if isSearching {
+                    searchResults
+                } else {
+                    transcript
+                    inputBar
+                }
             }
             .background(
                 LinearGradient(
@@ -33,6 +47,7 @@ struct CompanionView: View {
             )
             .navigationTitle("AI companion")
             .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $search, prompt: "Search conversation")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
@@ -71,6 +86,23 @@ struct CompanionView: View {
             }
             .onChange(of: messages.count) { _, _ in scrollToBottom(proxy) }
             .onChange(of: isThinking) { _, _ in scrollToBottom(proxy) }
+        }
+    }
+
+    @ViewBuilder
+    private var searchResults: some View {
+        if searchMatches.isEmpty {
+            ContentUnavailableView.search(text: search)
+        } else {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 14) {
+                    ForEach(searchMatches) { message in
+                        MessageBubble(message: message)
+                            .id(message.persistentModelID)
+                    }
+                }
+                .padding(20)
+            }
         }
     }
 

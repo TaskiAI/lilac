@@ -37,10 +37,19 @@ extension View {
 }
 
 /// The full reverse-chronological archive, opened from "View all" / "History".
+/// Searchable across the text Lilac actually has — prompt, typed/transcribed
+/// text, theme tags, Log feelings, and format — not the handwriting ink itself.
 struct AllEntriesView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \JournalEntry.createdAt, order: .reverse) private var entries: [JournalEntry]
+    @State private var search = ""
+
+    private var filtered: [JournalEntry] {
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return entries }
+        return entries.filter { $0.searchHaystack.contains(query) }
+    }
 
     var body: some View {
         NavigationStack {
@@ -51,9 +60,11 @@ struct AllEntriesView: View {
                         systemImage: "book",
                         description: Text("Your journal entries will appear here.")
                     )
+                } else if filtered.isEmpty {
+                    ContentUnavailableView.search(text: search)
                 } else {
                     List {
-                        ForEach(entries) { entry in
+                        ForEach(filtered) { entry in
                             NavigationLink(value: entry) {
                                 ArchiveRow(entry: entry)
                             }
@@ -64,6 +75,7 @@ struct AllEntriesView: View {
             }
             .navigationTitle("History")
             .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $search, prompt: "Search entries")
             .navigationDestination(for: JournalEntry.self) { journalDestination(for: $0) }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -75,7 +87,8 @@ struct AllEntriesView: View {
     }
 
     private func delete(at offsets: IndexSet) {
-        for index in offsets { context.delete(entries[index]) }
+        let targets = offsets.map { filtered[$0] }
+        for entry in targets { context.delete(entry) }
     }
 }
 
