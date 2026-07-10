@@ -1,31 +1,21 @@
 import SwiftUI
 import SwiftData
-import PencilKit
 
-/// The home screen — a calm, lavender landing page. It greets the writer by
-/// time of day, shows today's entries, and offers the ways in: start today's
-/// journal, start an activity, quick-write, and browse history.
+/// The home screen — a calm, intentional dashboard: greeting, goals, this
+/// week's moods + entries, a quote, and today's writing prompt. Four tabs at
+/// the bottom (Home / Sessions / History / Journey).
 struct EntryListView: View {
     @Environment(\.modelContext) private var context
     @EnvironmentObject private var auth: AuthManager
     @Query(sort: \JournalEntry.createdAt, order: .reverse) private var entries: [JournalEntry]
-    @Query(sort: \InsightReport.generatedAt, order: .reverse) private var reports: [InsightReport]
 
     @State private var path: [JournalEntry] = []
-    @State private var selectedTab: HomeTab = .journal
+    @State private var selectedTab: HomeTab = .home
+    @State private var showingSettings = false
+    @State private var showingGoals = false
+    @State private var promptQuestion = ""
 
-    // Sheets / flows.
-    @State private var showingStylePicker = false     // Quick write
-    @State private var showingAllEntries = false       // View all / History
-    @State private var showingActivities = false       // Start an activity
-    @State private var showingCompanion = false        // AI companion
-    @State private var showingNotifications = false     // bell
-    @State private var showingFocusEditor = false
-    @State private var showingSettings = false          // gear
-    @State private var showingInsights = false          // insights card
-    @State private var showingNudge = false             // "need a nudge?"
-
-    @AppStorage(FocusAreas.storageKey) private var focusRaw = FocusAreas.encode(FocusAreas.defaults)
+    @AppStorage(Goals.storageKey) private var goalsRaw = Goals.encode(Goals.defaults)
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -36,213 +26,80 @@ struct EntryListView: View {
                 )
                 .ignoresSafeArea()
 
-                Group {
-                    if selectedTab == .journal {
-                        home
-                    } else {
-                        MeetingsView()
-                    }
-                }
+                tabContent
             }
             .navigationBarHidden(true)
-            .safeAreaInset(edge: .bottom) { tabBar }
+            .safeAreaInset(edge: .bottom) { bottomBar }
             .navigationDestination(for: JournalEntry.self) { journalDestination(for: $0) }
-            .sheet(isPresented: $showingStylePicker) {
-                StylePickerView(onPick: newEntry)
-            }
-            .sheet(isPresented: $showingAllEntries) { AllEntriesView() }
-            .sheet(isPresented: $showingActivities) { ActivitiesSheet() }
-            .sheet(isPresented: $showingFocusEditor) { FocusEditorView(raw: $focusRaw) }
-            .sheet(isPresented: $showingCompanion) {
-                CompanionView()
-            }
-            .sheet(isPresented: $showingNotifications) {
-                NotificationsView(onStartJournal: startDailyJournal)
-            }
-            .sheet(isPresented: $showingSettings) {
-                SettingsView().environmentObject(auth)
-            }
-            .sheet(isPresented: $showingInsights) {
-                InsightsView(onStartPrompt: { startPromptedEntry($0) })
-            }
-            .sheet(isPresented: $showingNudge) {
-                PromptChooserView(
-                    suggestions: PromptSuggestions.list(
-                        insight: reports.first,
-                        focuses: FocusAreas.decode(focusRaw)
-                    ),
-                    onPick: { startPromptedEntry($0.text, style: $0.style) }
-                )
-            }
+            .sheet(isPresented: $showingSettings) { SettingsView().environmentObject(auth) }
+            .sheet(isPresented: $showingGoals) { GoalsEditorView(raw: $goalsRaw) }
+            .onAppear { if promptQuestion.isEmpty { promptQuestion = Self.seededQuestion() } }
         }
         .tint(.homeAccent)
     }
 
-    // MARK: Home content
+    @ViewBuilder
+    private var tabContent: some View {
+        switch selectedTab {
+        case .home:
+            home
+        case .sessions:
+            SessionsHub()
+        case .history:
+            AllEntriesView(embedded: true)
+        case .journey:
+            InsightsView(
+                onStartPrompt: { prompt in
+                    selectedTab = .home
+                    startPromptedEntry(prompt)
+                },
+                embedded: true
+            )
+        }
+    }
+
+    // MARK: Home
 
     private var home: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
-                header
-                dateBlock
-                VStack(alignment: .leading, spacing: 10) {
-                    PrimaryActionCard(
-                        icon: "pencil",
-                        title: "Start daily journal",
-                        action: startDailyJournal
-                    )
-                    Button {
-                        showingNudge = true
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "sparkles")
-                            Text("Need a nudge to begin?")
-                        }
-                        .font(.footnote)
-                        .foregroundStyle(Color.homeAccent)
-                        .padding(.leading, 4)
-                    }
-                    .buttonStyle(.plain)
-                }
-                todaysJournals
-                PrimaryActionCard(
-                    icon: "leaf",
-                    title: "Start an activity",
-                    action: { showingActivities = true }
+            VStack(spacing: 18) {
+                GreetingHeader(greeting: greeting, date: dateString) { showingSettings = true }
+                GoalsCard(goals: goals) { showingGoals = true }
+                WeekCard(
+                    weekDays: Self.weekDays(),
+                    entries: entries,
+                    todays: todaysEntries,
+                    onOpen: { startPromptedEntry(nil, existing: $0) },
+                    onRecap: { selectedTab = .journey }
                 )
-                focusSection
-                InsightsCard(headline: reports.first?.headline) { showingInsights = true }
-                quickRow
-                HistoryButton { showingAllEntries = true }
+                QuoteCard(text: Self.seededQuote())
+                PromptCard(
+                    question: promptQuestion,
+                    onShuffle: { promptQuestion = Self.seededQuestion(excluding: promptQuestion) },
+                    onStart: { startPromptedEntry(promptQuestion) }
+                )
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 20)
             .padding(.top, 8)
-            .padding(.bottom, 24)
+            .padding(.bottom, 40)
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(greeting)
-                    .font(.system(size: 40, design: .serif))
-                    .foregroundStyle(Color.homeAccentDeep)
-                Text("You're in the right place.")
-                    .font(.system(.body, design: .serif))
-                    .foregroundStyle(Color.homeSecondary)
-            }
-            Spacer(minLength: 8)
-            VStack(alignment: .trailing) {
-                HStack(spacing: 18) {
-                    Button {
-                        showingSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .font(.title3)
-                            .foregroundStyle(Color.homeAccentDeep)
-                    }
-                    .accessibilityLabel("Settings")
-                    Button {
-                        showingNotifications = true
-                    } label: {
-                        Image(systemName: "bell")
-                            .font(.title3)
-                            .foregroundStyle(Color.homeAccentDeep)
-                    }
-                    .accessibilityLabel("Notifications")
-                }
-                GlowOrbView(size: 78)
-                    .padding(.top, 4)
-            }
-        }
-    }
+    // MARK: Bottom bar + floating orb
 
-    private var dateBlock: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(todayString)
-                .font(.system(.title3, design: .serif).weight(.medium))
-                .foregroundStyle(Color.homeAccentDeep)
-            Text(PromptSuggestions.dailyLine(insight: reports.first, focuses: FocusAreas.decode(focusRaw)))
-                .font(.subheadline)
-                .foregroundStyle(Color.homeSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private var todaysJournals: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "Today's journals", action: "View all") {
-                showingAllEntries = true
-            }
-            if todaysEntries.isEmpty {
-                Text("Nothing yet today — start above whenever you're ready.")
-                    .font(.subheadline)
-                    .foregroundStyle(Color.homeSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(18)
-                    .homeCardBackground()
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(todaysEntries.enumerated()), id: \.element.id) { index, entry in
-                        if index > 0 {
-                            Divider().overlay(Color.homeHairline).padding(.leading, 60)
-                        }
-                        NavigationLink(value: entry) {
-                            TodayJournalRow(entry: entry)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .homeCardBackground()
-            }
-        }
-    }
-
-    private var focusSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "Your current focus", action: "Edit") {
-                showingFocusEditor = true
-            }
-            FlowLayout(spacing: 10) {
-                ForEach(focusAreas, id: \.self) { focus in
-                    FocusChip(text: focus)
+    private var bottomBar: some View {
+        TabBar4(selected: $selectedTab)
+            .overlay(alignment: .top) {
+                if selectedTab == .home {
+                    FloatingOrb { startPromptedEntry(promptQuestion) }
+                        .offset(y: -30)
                 }
             }
-        }
     }
 
-    private var quickRow: some View {
-        HStack(spacing: 14) {
-            SmallActionButton(icon: "pencil", title: "Quick write") {
-                showingStylePicker = true
-            }
-            SmallActionButton(icon: "bubble.left.and.text.bubble.right", title: "AI companion") {
-                showingCompanion = true
-            }
-        }
-    }
+    // MARK: Derived
 
-    private var tabBar: some View {
-        HStack(spacing: 0) {
-            TabBarItem(icon: "book", title: "Journal", isSelected: selectedTab == .journal) {
-                selectedTab = .journal
-            }
-            TabBarItem(icon: "person.2", title: "Meetings", isSelected: selectedTab == .meetings) {
-                selectedTab = .meetings
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 8)
-        .background(
-            Capsule().fill(Color.homeCard)
-                .shadow(color: Color.homeAccent.opacity(0.14), radius: 14, x: 0, y: 4)
-        )
-        .overlay(Capsule().stroke(Color.homeHairline, lineWidth: 1))
-        .padding(.horizontal, 40)
-        .padding(.bottom, 6)
-    }
-
-    // MARK: Dynamic values
+    private var goals: [Goal] { Goals.decode(goalsRaw) }
 
     private var greeting: String {
         switch Calendar.current.component(.hour, from: .now) {
@@ -252,375 +109,528 @@ struct EntryListView: View {
         }
     }
 
-    private var todayString: String {
-        Date().formatted(.dateTime.weekday(.wide).month(.wide).day())
+    private var dateString: String {
+        Date().formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
     }
 
     private var todaysEntries: [JournalEntry] {
-        entries.filter { Calendar.current.isDateInToday($0.createdAt) }
-    }
-
-    private var focusAreas: [String] {
-        FocusAreas.decode(focusRaw)
+        entries
+            .filter { Calendar.current.isDateInToday($0.createdAt) }
+            .sorted { $0.createdAt < $1.createdAt }
     }
 
     // MARK: Actions
 
-    /// The primary CTA: start today's journal as a free-flow check-in, seeded
-    /// instantly then upgraded to a generated prompt.
-    private func startDailyJournal() {
-        newEntry(style: .freeFlow, sessionLength: .quick)
-    }
-
-    /// Start a writing entry from a specific prompt (the insight's "write on
-    /// this" suggestion, or a chosen nudge). Uses the prompt exactly — no AI
-    /// rewrite — since the writer picked it on purpose.
-    private func startPromptedEntry(_ prompt: String, style: JournalStyle = .freeFlow) {
-        let entry = JournalEntry(prompt: prompt, style: style, sessionLength: .quick)
+    /// Start (or open) a writing entry. Pass `existing` to open one; otherwise a
+    /// new entry is created from `prompt` (may be nil for a blank page).
+    private func startPromptedEntry(_ prompt: String?, existing: JournalEntry? = nil) {
+        if let existing {
+            path.append(existing)
+            return
+        }
+        let entry = JournalEntry(prompt: prompt ?? "", style: .freeFlow, sessionLength: .quick)
         context.insert(entry)
         path.append(entry)
     }
 
-    private func newEntry(style: JournalStyle, sessionLength: SessionLength) {
-        // Seed instantly from the curated bank so navigation never waits on the
-        // network, then upgrade to a freshly generated prompt in the background.
-        let seeded = PromptBank.random(for: style)
-        let entry = JournalEntry(
-            prompt: seeded,
-            style: style,
-            sessionLength: sessionLength
-        )
-        context.insert(entry)
-        showingStylePicker = false
-        path.append(entry)
+    // MARK: Content pools
 
-        Task { @MainActor in
-            let generated = await PromptEngine.shared.prompt(for: style, excluding: seeded)
-            entry.prompt = generated
-        }
+    private static let questions = [
+        "What is something you're proud of from this past week?",
+        "What drained you this week, and what filled you back up?",
+        "When did you feel most like yourself lately?",
+        "What's one thing you'd like to carry into next week?",
+        "What did you learn about yourself recently?",
+        "Who or what are you grateful for right now?",
+        "What have you been carrying that you haven't said out loud?"
+    ]
+
+    private static let quotes = [
+        "Progress is built in small, honest moments. Keep showing up for yourself.",
+        "You don't have to have it all figured out to move forward.",
+        "Small steps, taken often, become a path.",
+        "Be gentle with yourself — you're doing the best you can.",
+        "The days you least feel like writing are often the ones worth writing."
+    ]
+
+    private static func dayIndex() -> Int {
+        Calendar.current.ordinality(of: .day, in: .year, for: .now) ?? 0
+    }
+
+    private static func seededQuestion(excluding: String? = nil) -> String {
+        let pool = questions.filter { $0 != excluding }
+        return pool.randomElement() ?? questions[dayIndex() % questions.count]
+    }
+
+    private static func seededQuote() -> String {
+        quotes[dayIndex() % quotes.count]
+    }
+
+    /// The seven days (Mon…Sun) of the week containing today.
+    static func weekDays(now: Date = .now) -> [Date] {
+        var calendar = Calendar.current
+        calendar.firstWeekday = 2 // Monday
+        let start = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
+        return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
     }
 }
 
-private enum HomeTab { case journal, meetings }
+enum HomeTab { case home, sessions, history, journey }
 
-// MARK: - Home components
+// MARK: - Header
 
-/// The big lavender call-to-action cards ("Start daily journal", "Start an
-/// activity"): a white icon disc, a serif title, and a trailing chevron disc.
-private struct PrimaryActionCard: View {
-    let icon: String
-    let title: String
-    let action: () -> Void
+private struct GreetingHeader: View {
+    let greeting: String
+    let date: String
+    let onProfile: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 16) {
-                ZStack {
-                    Circle().fill(Color.white).frame(width: 52, height: 52)
-                        .shadow(color: Color.homeAccent.opacity(0.12), radius: 6, x: 0, y: 2)
-                    Image(systemName: icon)
-                        .font(.title3)
-                        .foregroundStyle(Color.homeAccent)
-                }
-                Text(title)
-                    .font(.system(.title3, design: .serif).weight(.medium))
-                    .foregroundStyle(Color.homeAccentDeep)
-                Spacer(minLength: 8)
-                ChevronDisc()
-            }
-            .padding(18)
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 22)
-                    .fill(Color.homeTint)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 22))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-/// A section title with a trailing text action ("View all", "Edit").
-private struct SectionHeader: View {
-    let title: String
-    let action: String
-    let onTap: () -> Void
-
-    var body: some View {
-        HStack {
-            Text(title)
-                .font(.system(.title3, design: .serif))
-                .foregroundStyle(Color.homeAccentDeep)
-            Spacer()
-            Button(action: onTap) {
-                Text(action)
-                    .font(.subheadline)
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(greeting)
+                    .font(.system(size: 27, weight: .bold, design: .serif))
+                    .foregroundStyle(Color.homeHeading)
+                Text(date)
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(Color.homeAccent)
             }
+            Spacer()
+            Button(action: onProfile) {
+                Image(systemName: "person")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(Color.homeAccent)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(Color.homeTint))
+            }
+            .accessibilityLabel("Profile and settings")
         }
     }
 }
 
-/// One row in "Today's journals": a soft icon disc (sun for day, moon for
-/// evening, or the format's own glyph), a title, and the time it was written.
-private struct TodayJournalRow: View {
+// MARK: - Goals
+
+private struct GoalsCard: View {
+    let goals: [Goal]
+    let onEdit: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button(action: onEdit) {
+                HStack(spacing: 12) {
+                    IconDisc(symbol: "target", size: 40)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Goals")
+                            .font(.system(.headline, design: .serif))
+                            .foregroundStyle(Color.homeHeading)
+                        Text("Track your growth and stay intentional.")
+                            .font(.caption)
+                            .foregroundStyle(Color.homeSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Color.homeSecondary.opacity(0.6))
+                }
+                .padding(16)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            ForEach(goals) { goal in
+                Divider().overlay(Color.homeHairline).padding(.leading, 64)
+                GoalRow(goal: goal)
+            }
+        }
+        .homeCardBackground()
+    }
+}
+
+private struct GoalRow: View {
+    let goal: Goal
+
+    var body: some View {
+        HStack(spacing: 12) {
+            IconDisc(symbol: goal.icon, size: 36)
+            VStack(alignment: .leading, spacing: 7) {
+                HStack {
+                    Text(goal.title)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color.homeHeading)
+                    Spacer()
+                    Text("\(goal.current) / \(goal.target)")
+                        .font(.caption)
+                        .foregroundStyle(Color.homeSecondary)
+                }
+                ProgressBarView(fraction: goal.fraction)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+}
+
+private struct ProgressBarView: View {
+    let fraction: Double
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.homeHairline.opacity(0.7))
+                Capsule().fill(Color.homeAccent)
+                    .frame(width: max(6, geo.size.width * fraction))
+            }
+        }
+        .frame(height: 5)
+    }
+}
+
+// MARK: - Week card
+
+private struct WeekCard: View {
+    let weekDays: [Date]
+    let entries: [JournalEntry]
+    let todays: [JournalEntry]
+    let onOpen: (JournalEntry) -> Void
+    let onRecap: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 0) {
+                ForEach(weekDays, id: \.self) { day in
+                    DayColumn(day: day, entries: entries)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+
+            Divider().overlay(Color.homeHairline)
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Journal Entries")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Color.homeSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if todays.isEmpty {
+                    Text("Nothing yet today.")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.homeSecondary)
+                        .padding(.vertical, 4)
+                } else {
+                    ForEach(todays.prefix(3)) { entry in
+                        Button { onOpen(entry) } label: { EntryLine(entry: entry) }
+                            .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            Button(action: onRecap) {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus")
+                    Text("Recap Your Week")
+                        .font(.system(.subheadline, design: .serif).weight(.medium))
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                }
+                .foregroundStyle(Color.homeAccent)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 13)
+                .background(RoundedRectangle(cornerRadius: 14).fill(Color.homeTint))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .homeCardBackground()
+    }
+}
+
+private struct DayColumn: View {
+    let day: Date
+    let entries: [JournalEntry]
+
+    private var calendar: Calendar { .current }
+    private var isToday: Bool { calendar.isDateInToday(day) }
+    private var isFuture: Bool { calendar.startOfDay(for: day) > calendar.startOfDay(for: .now) }
+
+    private var dayEntries: [JournalEntry] {
+        entries.filter { calendar.isDate($0.createdAt, inSameDayAs: day) }
+    }
+
+    private var moodFace: String? {
+        let logs = dayEntries.filter { $0.format == .log }
+        if !logs.isEmpty {
+            let avg = logs.map { Double($0.moodLog.mood) }.reduce(0, +) / Double(logs.count)
+            return MoodLog.moodFace(Int(avg.rounded()))
+        }
+        return dayEntries.isEmpty ? nil : "🙂"
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Text(day.formatted(.dateTime.weekday(.abbreviated)))
+                .font(.caption2)
+                .foregroundStyle(isToday ? Color.homeAccent : Color.homeSecondary)
+            Text(day.formatted(.dateTime.day()))
+                .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                .foregroundStyle(isToday ? .white : Color.homeHeading)
+                .frame(width: 30, height: 30)
+                .background {
+                    if isToday { Circle().fill(Color.homeAccent) }
+                }
+            Text(moodFace ?? "")
+                .font(.system(size: 15))
+                .opacity(isFuture ? 0.25 : 1)
+                .frame(height: 16)
+            Circle()
+                .fill(dayEntries.isEmpty ? .clear : Color.homeAccent)
+                .frame(width: 4, height: 4)
+        }
+    }
+}
+
+private struct EntryLine: View {
     let entry: JournalEntry
 
     private var hour: Int { Calendar.current.component(.hour, from: entry.createdAt) }
 
-    private var iconName: String {
-        if let format = entry.format { return format.icon }
-        return hour >= 17 || hour < 5 ? "moon" : "sun.max"
-    }
-
-    private var title: String {
+    private var name: String {
         if let t = entry.title, !t.isEmpty { return t }
         if let format = entry.format { return "\(format.title) Journal" }
         switch hour {
         case 5..<12: return "Morning Journal"
-        case 12..<17: return "Afternoon Journal"
+        case 12..<17: return "Midday Reflection"
         default: return "Evening Journal"
         }
     }
 
+    private var face: String {
+        if entry.format == .log { return MoodLog.moodFace(entry.moodLog.mood) }
+        return "🙂"
+    }
+
     var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle().fill(Color.homeTint).frame(width: 40, height: 40)
-                Image(systemName: iconName)
-                    .font(.subheadline)
-                    .foregroundStyle(Color.homeAccent)
-            }
+        HStack(spacing: 12) {
+            Text(face)
+                .font(.system(size: 16))
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(Color.homeTint))
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(.body, design: .serif).weight(.medium))
-                    .foregroundStyle(Color.homeAccentDeep)
+                Text(name)
+                    .font(.system(.subheadline, design: .serif).weight(.medium))
+                    .foregroundStyle(Color.homeHeading)
                 Text(entry.createdAt.formatted(date: .omitted, time: .shortened))
-                    .font(.caption)
+                    .font(.caption2)
                     .foregroundStyle(Color.homeSecondary)
             }
             Spacer()
             Image(systemName: "chevron.right")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(Color.homeSecondary.opacity(0.6))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.homeSecondary.opacity(0.5))
         }
-        .padding(16)
         .contentShape(Rectangle())
     }
 }
 
-/// A single "current focus" pill.
-private struct FocusChip: View {
+// MARK: - Quote
+
+private struct QuoteCard: View {
     let text: String
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: FocusAreas.icon(for: text))
-                .font(.caption)
-                .foregroundStyle(Color.homeAccent)
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "quote.opening")
+                .font(.title3)
+                .foregroundStyle(Color.homeAccent.opacity(0.6))
             Text(text)
-                .font(.footnote)
-                .foregroundStyle(Color.homeSecondary)
+                .font(.system(.subheadline, design: .serif))
+                .foregroundStyle(Color.homeAccentDeep)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+            Image(systemName: "quote.closing")
+                .font(.title3)
+                .foregroundStyle(Color.homeAccent.opacity(0.6))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
+        .padding(18)
+        .frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: 18).fill(Color.homeTint))
+    }
+}
+
+// MARK: - Prompt
+
+private struct PromptCard: View {
+    let question: String
+    let onShuffle: () -> Void
+    let onStart: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            ZStack(alignment: .topTrailing) {
+                IconDisc(symbol: "lightbulb", size: 48)
+                    .frame(maxWidth: .infinity)
+                Button(action: onShuffle) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.homeAccent)
+                }
+                .accessibilityLabel("New prompt")
+            }
+            Text(question)
+                .font(.system(.title3, design: .serif).weight(.semibold))
+                .foregroundStyle(Color.homeHeading)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(action: onStart) {
+                Text("Start Writing")
+                    .font(.system(.headline, design: .serif))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 13)
+                    .background(Capsule().fill(Color.homeAccent))
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity)
+        .homeCardBackground()
+    }
+}
+
+// MARK: - Floating orb
+
+private struct FloatingOrb: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            GlowOrbView(size: 46)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Start writing")
+    }
+}
+
+// MARK: - Tab bar
+
+private struct TabBar4: View {
+    @Binding var selected: HomeTab
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 0) {
+            item(.home, "house", "Home")
+            item(.sessions, "message", "Sessions")
+            item(.history, "book", "History")
+            item(.journey, "leaf", "Journey")
+        }
+        .padding(.top, 12)
+        .padding(.bottom, 6)
+        .padding(.horizontal, 12)
         .background(
-            Capsule().fill(Color.homeCard)
-                .overlay(Capsule().stroke(Color.homeHairline, lineWidth: 1))
+            Color.homeCard
+                .overlay(alignment: .top) { Rectangle().fill(Color.homeHairline).frame(height: 0.75) }
+                .ignoresSafeArea(edges: .bottom)
         )
     }
-}
 
-/// The paired white buttons ("Quick write", "AI companion").
-private struct SmallActionButton: View {
-    let icon: String
-    let title: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                ZStack {
-                    Circle().fill(Color.homeTint).frame(width: 38, height: 38)
-                    Image(systemName: icon)
-                        .font(.subheadline)
-                        .foregroundStyle(Color.homeAccent)
-                }
-                Text(title)
-                    .font(.system(.subheadline, design: .serif).weight(.medium))
-                    .foregroundStyle(Color.homeAccentDeep)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                Spacer(minLength: 4)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.homeSecondary.opacity(0.6))
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity)
-            .homeCardBackground()
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-/// The full-width "History" button.
-private struct HistoryButton: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 14) {
-                ZStack {
-                    Circle().fill(Color.homeTint).frame(width: 44, height: 44)
-                    Image(systemName: "book")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.homeAccent)
-                }
-                Text("History")
-                    .font(.system(.body, design: .serif).weight(.medium))
-                    .foregroundStyle(Color.homeAccentDeep)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Color.homeSecondary.opacity(0.6))
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity)
-            .homeCardBackground()
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-/// The home entry point into Insights. Shows the latest AI headline as a teaser
-/// when one exists, or an invitation to discover patterns.
-private struct InsightsCard: View {
-    let headline: String?
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 14) {
-                ZStack {
-                    Circle().fill(Color.homeTint).frame(width: 44, height: 44)
-                    Image(systemName: "sparkles")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.homeAccent)
-                }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Insights")
-                        .font(.system(.body, design: .serif).weight(.medium))
-                        .foregroundStyle(Color.homeAccentDeep)
-                    Text(headline?.isEmpty == false ? headline! : "See what your journaling reveals")
-                        .font(.caption)
-                        .foregroundStyle(Color.homeSecondary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                }
-                Spacer(minLength: 4)
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Color.homeSecondary.opacity(0.6))
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity)
-            .homeCardBackground()
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-/// A small chevron inside a faint disc, used on the primary cards.
-private struct ChevronDisc: View {
-    var body: some View {
-        ZStack {
-            Circle().fill(Color.homeAccent.opacity(0.14)).frame(width: 34, height: 34)
-            Image(systemName: "chevron.right")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(Color.homeAccent)
-        }
-    }
-}
-
-/// One item in the bottom tab bar.
-private struct TabBarItem: View {
-    let icon: String
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
+    private func item(_ tab: HomeTab, _ icon: String, _ label: String) -> some View {
+        let active = selected == tab
+        return Button {
+            selected = tab
+        } label: {
             VStack(spacing: 4) {
-                HStack(spacing: 8) {
-                    Image(systemName: icon)
-                    Text(title)
-                        .font(.system(.subheadline, design: .serif))
-                }
-                .foregroundStyle(isSelected ? Color.homeAccent : Color.homeSecondary)
+                Image(systemName: icon)
+                    .font(.system(size: 20))
+                Text(label)
+                    .font(.caption2)
                 Rectangle()
-                    .fill(isSelected ? Color.homeAccent : .clear)
-                    .frame(width: 26, height: 2)
+                    .fill(active ? Color.homeAccent : .clear)
+                    .frame(width: 20, height: 2)
                     .clipShape(Capsule())
             }
+            .foregroundStyle(active ? Color.homeAccent : Color.homeSecondary)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
 }
 
-// MARK: - Activities sheet
+// MARK: - Shared bits
 
-/// Opened from "Start an activity": the Rewind resurfacing activity plus the
-/// other ways to journal (drawing, photo, audio, …).
-private struct ActivitiesSheet: View {
-    @Environment(\.modelContext) private var context
-    @Environment(\.dismiss) private var dismiss
-    @State private var path: [JournalEntry] = []
+private struct IconDisc: View {
+    let symbol: String
+    var size: CGFloat = 40
 
     var body: some View {
-        NavigationStack(path: $path) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    Text("Reflect")
-                        .font(.system(.title3, design: .serif))
-                        .foregroundStyle(Color.homeAccentDeep)
-                    RewindActivitySection()
-
-                    Text("More ways to journal")
-                        .font(.system(.title3, design: .serif))
-                        .foregroundStyle(Color.homeAccentDeep)
-                    FormatGallery(onSelect: create)
-                        .padding(.horizontal, -20)
-                }
-                .padding(20)
-            }
-            .background(
-                LinearGradient(
-                    colors: [.homeBackgroundTop, .homeBackgroundBottom],
-                    startPoint: .top, endPoint: .bottom
-                )
-                .ignoresSafeArea()
-            )
-            .navigationTitle("Activities")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: JournalEntry.self) { journalDestination(for: $0) }
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-        .tint(.homeAccent)
+        Image(systemName: symbol)
+            .font(.system(size: size * 0.42))
+            .foregroundStyle(Color.homeAccent)
+            .frame(width: size, height: size)
+            .background(Circle().fill(Color.homeTint))
     }
+}
 
-    /// Every format now has a real editor — create the entry and open it.
-    private func create(_ format: JournalFormat) {
-        let entry = JournalEntry(prompt: "", format: format)
-        context.insert(entry)
-        path.append(entry)
+// MARK: - Sessions tab
+
+/// The Sessions tab: a small hub for the AI companion and meetings.
+private struct SessionsHub: View {
+    @State private var showCompanion = false
+    @State private var showMeetings = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Sessions")
+                    .font(.system(size: 27, weight: .bold, design: .serif))
+                    .foregroundStyle(Color.homeHeading)
+                    .padding(.top, 8)
+
+                SessionCard(
+                    icon: "message",
+                    title: "AI companion",
+                    subtitle: "A gentle listener that reflects your words back."
+                ) { showCompanion = true }
+
+                SessionCard(
+                    icon: "person.2",
+                    title: "Meetings",
+                    subtitle: "Track therapy sessions and check-ins."
+                ) { showMeetings = true }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 40)
+        }
+        .sheet(isPresented: $showCompanion) { CompanionView() }
+        .sheet(isPresented: $showMeetings) { MeetingsView() }
+    }
+}
+
+private struct SessionCard: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                IconDisc(symbol: icon, size: 46)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.system(.headline, design: .serif))
+                        .foregroundStyle(Color.homeHeading)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(Color.homeSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Color.homeSecondary.opacity(0.6))
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity)
+            .homeCardBackground()
+        }
+        .buttonStyle(.plain)
     }
 }

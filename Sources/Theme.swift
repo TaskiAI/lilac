@@ -22,6 +22,8 @@ extension Color {
     // diary. These tokens are scoped to the home surface; the writing page
     // still routes through `JournalTheme`.
 
+    /// Near-black heading text (e.g. the "Good morning" hero).
+    static let homeHeading = Color(red: 0.13, green: 0.13, blue: 0.16)
     /// Primary lavender — headings, active icons, accents.
     static let homeAccent = Color(red: 0.545, green: 0.478, blue: 0.753)
     /// A deeper lavender for the hero greeting.

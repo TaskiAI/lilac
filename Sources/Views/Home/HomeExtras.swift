@@ -40,6 +40,9 @@ extension View {
 /// Searchable across the text Lilac actually has — prompt, typed/transcribed
 /// text, theme tags, Log feelings, and format — not the handwriting ink itself.
 struct AllEntriesView: View {
+    /// When shown as a tab (vs. a sheet), the "Done" button is omitted.
+    var embedded = false
+
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \JournalEntry.createdAt, order: .reverse) private var entries: [JournalEntry]
@@ -78,8 +81,10 @@ struct AllEntriesView: View {
             .searchable(text: $search, prompt: "Search entries")
             .navigationDestination(for: JournalEntry.self) { journalDestination(for: $0) }
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                if !embedded {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
                 }
             }
         }

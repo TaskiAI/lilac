@@ -20,6 +20,8 @@ struct InsightsView: View {
 
     /// Starts a journal entry from a suggested prompt (host handles navigation).
     var onStartPrompt: (String) -> Void = { _ in }
+    /// When shown as a tab (vs. a sheet), the "Done" button is omitted.
+    var embedded = false
 
     private let periodDays = 14
     private var engine: InsightEngine { InsightEngine(context: context) }
@@ -46,8 +48,10 @@ struct InsightsView: View {
             .navigationTitle("Insights")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
+                if !embedded {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done") { dismiss() }
+                    }
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
