@@ -6,20 +6,36 @@ struct LilacApp: App {
     let container: ModelContainer
 
     init() {
+        let schema = Schema([
+            JournalEntry.self,
+            RewindCandidate.self,
+            RewindSession.self,
+            RewindSettings.self,
+            AICallLog.self,
+            CompanionMessage.self,
+            Meeting.self,
+            InsightReport.self,
+            TherapySession.self,
+        ])
+
+        // Back the store with private CloudKit mirroring, so a user's journal
+        // syncs to their iCloud and survives a lost/replaced device. Requires the
+        // iCloud + CloudKit entitlement and a provisioned container (see
+        // project.yml). If CloudKit isn't available — not signed into iCloud, the
+        // entitlement missing in a dev build, an unprovisioned container — fall
+        // back to a local-only store so the app still launches (just without
+        // backup). Session audio lives on disk, so only transcripts/summaries and
+        // the handwritten entries themselves are mirrored, not the raw audio.
         do {
-            container = try ModelContainer(
-                for: JournalEntry.self,
-                RewindCandidate.self,
-                RewindSession.self,
-                RewindSettings.self,
-                AICallLog.self,
-                CompanionMessage.self,
-                Meeting.self,
-                InsightReport.self,
-                TherapySession.self
-            )
+            let cloud = ModelConfiguration(schema: schema, cloudKitDatabase: .automatic)
+            container = try ModelContainer(for: schema, configurations: cloud)
         } catch {
-            fatalError("Failed to create ModelContainer: \(error)")
+            do {
+                let local = ModelConfiguration(schema: schema)
+                container = try ModelContainer(for: schema, configurations: local)
+            } catch {
+                fatalError("Failed to create ModelContainer: \(error)")
+            }
         }
     }
 

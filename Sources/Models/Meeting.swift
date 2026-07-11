@@ -7,11 +7,13 @@ import SwiftData
 /// jot notes to bring or take away.
 @Model
 final class Meeting {
-    var title: String
-    var personName: String
-    var date: Date
-    var notes: String
-    var location: String
+    // Defaults so the model is CloudKit-compatible (see `JournalEntry`). This
+    // model is otherwise unused now, but it's still in the container.
+    var title: String = ""
+    var personName: String = ""
+    var date: Date = Date.now
+    var notes: String = ""
+    var location: String = ""
 
     init(
         title: String = "",

@@ -11,21 +11,24 @@ import SwiftData
 /// A brand-new `@Model` — remember to register it in `LilacApp`'s container.
 @Model
 final class TherapySession {
-    var createdAt: Date
+    // Non-optional fields carry property-level defaults so the model is
+    // CloudKit-compatible (see `JournalEntry`).
+    var createdAt: Date = Date.now
     /// When the session is (or was) held. Future-dated sessions with no recording
     /// yet are the "upcoming" ones shown in the calendar strip.
-    var date: Date
-    var title: String
-    var therapistName: String
+    var date: Date = Date.now
+    var title: String = ""
+    var therapistName: String = ""
     /// Free notes to bring or take away (used mainly while a session is scheduled).
-    var notes: String
+    var notes: String = ""
 
     // MARK: Recording
 
     /// The recorded audio's filename in `SessionAudioStore` (Application Support).
-    /// nil until the session is recorded.
+    /// nil until the session is recorded. NOTE: the audio file lives on disk, not
+    /// in the store, so CloudKit backs up the transcript/summary — not the audio.
     var audioFilename: String?
-    var duration: TimeInterval
+    var duration: TimeInterval = 0
 
     // MARK: Transcript
 
@@ -38,7 +41,7 @@ final class TherapySession {
     private var segmentsData: Data?
     /// Whether to swap which raw speaker maps to "You" vs. the therapist, since
     /// diarization can't know identities. Toggled from the detail screen.
-    var swapSpeakers: Bool
+    var swapSpeakers: Bool = false
 
     // MARK: AI
 

@@ -3,10 +3,14 @@ import SwiftData
 
 @Model
 final class JournalEntry {
-    var createdAt: Date
-    var prompt: String
+    // Property-level defaults on the non-optional fields so the model is
+    // CloudKit-compatible (private iCloud mirroring requires every attribute to
+    // be optional or defaulted). `init` still sets them; the defaults only feed
+    // schema generation and CloudKit record materialization.
+    var createdAt: Date = Date.now
+    var prompt: String = ""
     /// Serialized PKDrawing (`PKDrawing.dataRepresentation()`).
-    var drawingData: Data
+    var drawingData: Data = Data()
 
     // Persisted as optional raw strings so that stores created before these
     // fields existed migrate cleanly: SwiftData's automatic lightweight
@@ -71,6 +75,17 @@ final class JournalEntry {
     var classifiedAt: Date? = nil
     /// For a reflection written against a rewound entry: the source entry it responds to.
     var linkedEntry: JournalEntry? = nil
+
+    // Inverse relationships. CloudKit mirroring requires every relationship to
+    // have an inverse; these are the inverses of `linkedEntry`,
+    // `RewindCandidate.entry`, and `RewindSession.entry`. All optional/to-many,
+    // so migration-safe and rarely read directly.
+    /// Entries whose `linkedEntry` points at this one (reflections written against it).
+    @Relationship(inverse: \JournalEntry.linkedEntry) var reflections: [JournalEntry]? = nil
+    /// Rewind candidates computed from this entry.
+    @Relationship(inverse: \RewindCandidate.entry) var rewindCandidates: [RewindCandidate]? = nil
+    /// Rewind sessions that surfaced this entry.
+    @Relationship(inverse: \RewindSession.entry) var rewindSessions: [RewindSession]? = nil
 
     /// Theme tags, decoded/encoded from `themeTagsData`.
     var themeTags: [String] {

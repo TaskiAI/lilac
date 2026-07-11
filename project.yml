@@ -19,6 +19,16 @@ targets:
       properties:
         com.apple.developer.applesignin:
           - Default
+        # iCloud / CloudKit backup + sync of the SwiftData store. Requires the
+        # container below to be created in your Apple Developer account
+        # ("iCloud.com.lilac.journal") and the CloudKit + Push Notifications
+        # capabilities enabled for the App ID. Without provisioning the app falls
+        # back to a local-only store (see LilacApp) rather than failing.
+        com.apple.developer.icloud-services:
+          - CloudKit
+        com.apple.developer.icloud-container-identifiers:
+          - iCloud.com.lilac.journal
+        aps-environment: development
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.lilac.journal
@@ -42,6 +52,8 @@ targets:
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Lilac transcribes your recordings into text you can edit."
         # App lock: unlock the journal with Face ID / Touch ID.
         INFOPLIST_KEY_NSFaceIDUsageDescription: "Lilac uses Face ID to unlock your private journal."
+        # Let CloudKit deliver sync changes in the background (remote notifications).
+        INFOPLIST_KEY_UIBackgroundModes: "remote-notification"
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"

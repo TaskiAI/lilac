@@ -6,9 +6,10 @@ import SwiftData
 /// as a raw string for the same clean-migration reason as `JournalEntry.style`.
 @Model
 final class CompanionMessage {
-    var createdAt: Date
-    var text: String
-    private var roleRawValue: String
+    // Defaults so the model is CloudKit-compatible (see `JournalEntry`).
+    var createdAt: Date = Date.now
+    var text: String = ""
+    private var roleRawValue: String = CompanionRole.assistant.rawValue
 
     var role: CompanionRole {
         get { CompanionRole(rawValue: roleRawValue) ?? .assistant }
