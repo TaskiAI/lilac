@@ -63,7 +63,8 @@ final class SessionProcessor {
             session.transcript = segments
                 .map { "\($0.speaker): \($0.text)" }
                 .joined(separator: "\n")
-        } else if let flat = try? await SpeechTranscriber.transcribe(url: url), !flat.isEmpty {
+        } else if await SpeechTranscriber.requestPermission(),
+                  let flat = try? await SpeechTranscriber.transcribe(url: url), !flat.isEmpty {
             session.transcript = flat
             session.segments = []
         } else {
