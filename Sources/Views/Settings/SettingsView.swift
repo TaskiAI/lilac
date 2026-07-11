@@ -8,17 +8,12 @@ struct SettingsView: View {
 
     @State private var sheet: SettingsSheet?
     @State private var showResetConfirm = false
-    @AppStorage(InsightEngine.enabledKey) private var insightsEnabled = true
-    @AppStorage(WritingAssistant.enabledKey) private var assistEnabled = true
-    @AppStorage(FocusAreas.storageKey) private var focusRaw = FocusAreas.encode(FocusAreas.defaults)
 
     var body: some View {
         NavigationStack {
             List {
                 profileSection
-                personalizeSection
                 securitySection
-                privacySection
                 aboutSection
                 accountSection
             }
@@ -41,10 +36,6 @@ struct SettingsView: View {
                     ProfileEditView().environmentObject(auth)
                 case .passcode(let mode):
                     PasscodeFlowSheet(mode: mode).environmentObject(auth)
-                case .reminders:
-                    NotificationsView()
-                case .focus:
-                    FocusEditorView(raw: $focusRaw)
                 }
             }
             .confirmationDialog(
@@ -62,18 +53,6 @@ struct SettingsView: View {
     }
 
     // MARK: Sections
-
-    private var personalizeSection: some View {
-        Section("Personalize") {
-            Button { sheet = .reminders } label: {
-                Label("Reminders & nudges", systemImage: "bell")
-            }
-            Button { sheet = .focus } label: {
-                Label("Focus areas", systemImage: "scope")
-            }
-        }
-        .tint(.homeAccent)
-    }
 
     private var profileSection: some View {
         Section {
@@ -141,29 +120,14 @@ struct SettingsView: View {
         .tint(.homeAccent)
     }
 
-    private var privacySection: some View {
-        Section {
-            Toggle(isOn: $insightsEnabled) {
-                Label("AI insights", systemImage: "sparkles")
-            }
-            .tint(.homeAccent)
-            Toggle(isOn: $assistEnabled) {
-                Label("Writing help", systemImage: "hand.point.up.left")
-            }
-            .tint(.homeAccent)
-        } header: {
-            Text("Privacy")
-        } footer: {
-            Text("Insights sends a summary of recent entries to DeepSeek. Writing help sends the current entry when you pause, to suggest directions. Both off keep everything on-device.")
-        }
-    }
-
     private var aboutSection: some View {
-        Section("About") {
+        Section {
             LabeledContent("Version", value: appVersion)
-            Text("Lilac keeps your entries on this device. AI features (prompts, companion, Rewind) send text off-device only when enabled.")
+            Text("Lilac keeps your entries on this device. Recorded sessions are sent off-device for transcription and AI summaries.")
                 .font(.footnote)
                 .foregroundStyle(Color.homeSecondary)
+        } header: {
+            Text("About")
         }
     }
 
@@ -197,15 +161,11 @@ struct SettingsView: View {
 private enum SettingsSheet: Identifiable {
     case editProfile
     case passcode(PasscodeFlowSheet.Mode)
-    case reminders
-    case focus
 
     var id: String {
         switch self {
         case .editProfile: return "editProfile"
         case .passcode(let mode): return "passcode-\(mode)"
-        case .reminders: return "reminders"
-        case .focus: return "focus"
         }
     }
 }

@@ -2,15 +2,13 @@ import SwiftUI
 import SwiftData
 
 /// The Sessions tab: the therapist-session assistant. A calendar strip of
-/// upcoming sessions sits up top, the recorded sessions list below, and a docked
-/// bar at the bottom carries the AI companion chatbox plus a glowing record orb
-/// for capturing a new session.
+/// upcoming sessions sits up top, the recorded sessions list below, and a
+/// glowing record orb docked at the bottom for capturing a new session.
 struct SessionsView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \TherapySession.date, order: .reverse) private var sessions: [TherapySession]
 
     @State private var showingRecord = false
-    @State private var showingCompanion = false
     @State private var scheduling: TherapySession?
     @State private var showingSchedule = false
     @State private var selected: TherapySession?
@@ -52,7 +50,6 @@ struct SessionsView: View {
             .navigationDestination(item: $selected) { SessionDetailView(session: $0) }
             .safeAreaInset(edge: .bottom) { bottomDock }
             .sheet(isPresented: $showingRecord) { SessionRecordView() }
-            .sheet(isPresented: $showingCompanion) { CompanionView() }
             .sheet(isPresented: $showingSchedule) { SessionScheduleForm(session: nil) }
             .sheet(item: $scheduling) { SessionScheduleForm(session: $0) }
         }
@@ -119,37 +116,20 @@ struct SessionsView: View {
         .homeCardBackground()
     }
 
-    // MARK: Bottom dock — companion chatbox + record orb
+    // MARK: Bottom dock — record orb
 
     private var bottomDock: some View {
-        HStack(spacing: 12) {
-            Button { showingCompanion = true } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "sparkles")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.homeAccent)
-                    Text("Ask your companion…")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.homeSecondary)
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(
-                    Capsule()
-                        .fill(Color.homeCard)
-                        .overlay(Capsule().stroke(Color.homeHairline, lineWidth: 1))
-                )
-            }
-            .buttonStyle(.plain)
-
+        VStack(spacing: 4) {
             Button { showingRecord = true } label: {
-                GlowOrbView(size: 42)
+                GlowOrbView(size: 46)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Record a session")
+            Text("Record a session")
+                .font(.caption2)
+                .foregroundStyle(Color.homeSecondary)
         }
-        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
         .padding(.top, 8)
         .padding(.bottom, 6)
         .background(.ultraThinMaterial)

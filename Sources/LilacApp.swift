@@ -9,13 +9,6 @@ struct LilacApp: App {
         do {
             container = try ModelContainer(
                 for: JournalEntry.self,
-                RewindCandidate.self,
-                RewindSession.self,
-                RewindSettings.self,
-                AICallLog.self,
-                CompanionMessage.self,
-                Meeting.self,
-                InsightReport.self,
                 TherapySession.self
             )
         } catch {
@@ -31,7 +24,7 @@ struct LilacApp: App {
     }
 }
 
-/// Gates the app behind the splash + account/lock flow, then shows the journal.
+/// Gates the app behind the splash + account/lock flow, then shows the app.
 /// Re-engages the lock whenever the app is backgrounded.
 private struct RootView: View {
     let container: ModelContainer
@@ -52,26 +45,12 @@ private struct RootView: View {
                 LockView()
                     .environmentObject(auth)
             case .unlocked:
-                EntryListView()
-                    .tint(.lilac)
+                RootTabView()
+                    .tint(.homeAccent)
                     .environmentObject(auth)
                     .task {
-                        // Keep handwriting transcripts current first, so the tools
-                        // below read real words. Then the local stand-in for the
-                        // scheduled backend job: classify entries and refresh
-                        // candidates, then refresh insights if they've gone stale
-                        // (both gated on their own privacy settings).
-                        await TranscriptionEngine(context: container.mainContext).run()
-                        await RewindEngine(context: container.mainContext).run()
                         // Resume any session transcription interrupted by a close.
                         await SessionProcessor(context: container.mainContext).runPending()
-                        let insights = InsightEngine(context: container.mainContext)
-                        if insights.isEnabled, insights.isStale() {
-                            let focuses = FocusAreas.decode(
-                                UserDefaults.standard.string(forKey: FocusAreas.storageKey) ?? ""
-                            )
-                            await insights.generate(focuses: focuses)
-                        }
                     }
             }
         }

@@ -4,91 +4,61 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Lilac is an iOS journaling app. Entries are **handwritten** (Apple Pencil / finger) on a ruled, aged-paper page, not typed text. The current mode is a free-form diary; prompted / typed journaling modes will be built on the same reusable page. Built with SwiftUI + SwiftData + PencilKit, iOS 17+.
+Lilac (v2) is a lean **therapy companion** for iOS: record your therapy sessions and reflect between them. It has exactly two features behind an app lock:
+
+1. **Sessions** — record a therapy session → get a speaker-diarized transcript → an AI summary → transcript-grounded Q&A.
+2. **Journal** — a simple **typed** journal for reflecting between sessions.
+
+Built with SwiftUI + SwiftData, iOS 17+. No handwriting, no separate view-model layer.
+
+> **History:** v1 was a feature-heavy handwritten-journaling app (5 media formats, AI prompts, an AI companion, an Insights dashboard, the "Rewind" activity, mood logging, etc.). v2 stripped all of that to sharpen the therapy-companion wedge. The full v1 is preserved at git tag **`v1.0`** / branch **`v1-full-featured`**. If you find a reference to a cut feature, it belongs to v1.
 
 ## Project generation & build
 
-The Xcode project (`Lilac.xcodeproj`) is **generated** from `project.yml` by [XcodeGen](https://github.com/yonaskolb/XcodeGen) — treat the `.xcodeproj` as a build artifact. Edit `project.yml` for any target/setting/bundle-id changes, then regenerate; do not hand-edit `project.pbxproj`.
+The Xcode project (`Lilac.xcodeproj`) is **generated** from `project.yml` by [XcodeGen](https://github.com/yonaskolb/XcodeGen) — treat the `.xcodeproj` as a build artifact. Edit `project.yml` for target/setting/bundle-id changes, then regenerate; never hand-edit `project.pbxproj`.
 
 ```sh
-xcodegen generate                                    # regenerate .xcodeproj after changing project.yml or adding files
+xcodegen generate
 xcodebuild -project Lilac.xcodeproj -scheme Lilac \
-  -destination 'platform=iOS Simulator,name=iPhone 17' build   # use any installed simulator (xcrun simctl list devices available)
+  -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 ```
 
-New Swift files under `Sources/` are picked up automatically on the next `xcodegen generate` (the target sources the whole `Sources` directory) — no need to register files manually.
+New Swift files under `Sources/` are picked up automatically on the next `xcodegen generate` (the target sources the whole `Sources` directory).
 
-**Optional CocoaPods dep (handwriting):** ML Kit Digital Ink is integrated via the `Podfile`. It is optional — the app builds and runs without it (Vision fallback). To enable it: `xcodegen generate` → `pod install` → open `Lilac.xcworkspace`. Re-run `pod install` after every `xcodegen generate` (regenerating drops the pods integration).
+CI (`.github/workflows/ci.yml`) builds + runs the `LilacTests` target on every push/PR to `main`. **This is the primary build verification** — much of v2 was written in an environment that can't compile iOS, so lean on CI.
 
-There is a `LilacTests` unit-test target (`Tests/`, added with the Rewind feature) run via the `Lilac` scheme; no lint config yet.
+The `Podfile` still lists optional pods (GoogleSignIn for social auth; ML Kit is now unused after v2). They are not needed to build — the app builds without `pod install` (CI does not run pods). Social sign-in is guarded by `#if canImport(GoogleSignIn)`.
 
 ## Architecture
 
-Single-window SwiftUI app. Data flows through SwiftData; there is no separate view-model layer.
+Single-window SwiftUI app; data flows through SwiftData.
 
-- `LilacApp.swift` — `@main`; installs the `.modelContainer(for: JournalEntry.self)` and global `.lilac` tint.
-- `Models/JournalEntry.swift` — the only `@Model`. A drawing is persisted as `drawingData: Data`, the serialized `PKDrawing.dataRepresentation()`. There is no separate image storage; thumbnails are rendered on demand.
-- `Views/EntryListView.swift` — home screen. Uses `@Query` for the reverse-chronological feed and drives navigation with a `NavigationStack(path:)`. New entries are inserted into the context and pushed onto the path in one step. `EntryRow` renders a live thumbnail by decoding `drawingData` back into a `PKDrawing`.
-- Writing entries (`format == nil`) all route to `JournalPage(entry:)` directly (see `journalDestination` in `Views/Home/HomeExtras.swift`). The prompt lives **on the page**: `JournalPage`'s header hosts an inline prompt control (an "add a prompt" pill when blank, or the chosen prompt with shuffle/change/remove via `PromptPickerSheet`). There is no separate prompted-vs-blank screen anymore.
-- `Prompts/PromptBank.swift` — a hardcoded list of curated prompts per style with `random(for:excluding:)`. The offline source of truth: always available, no network or key.
-- `Prompts/PromptEngine.swift` — the AI-generated prompt engine. `PromptEngine.shared.prompt(for:excluding:)` (async) asks DeepSeek (OpenAI-compatible Chat Completions API, `deepseek-chat`, raw `URLSession` with a `Bearer` key) for a fresh, style-matched prompt, and **falls back to `PromptBank` on any failure** (no key, offline, non-2xx, decode error) — callers never see an error. The key is read from `DEEPSEEK_API_KEY` (process environment, or the Info.plist value wired through `project.yml`); no key ⇒ offline mode. Call sites seed instantly from `PromptBank`; the on-page prompt control (`JournalPage`) and the home Create flow pick from `PromptBank`.
-- `Prompts/DeepSeekClient.swift` — shared DeepSeek Chat Completions client + `DEEPSEEK_API_KEY` resolution, used by the Rewind AI calls (the older `PromptEngine` still has its own copy).
-- `Theme.swift` — color tokens: the diary palette (below) plus the legacy `Color.lilac` / `Color.lilacSoft`.
+- `LilacApp.swift` — `@main`. Container holds just `JournalEntry` + `TherapySession`. `RootView` gates on `AuthManager` (splash → account → lock → app) and, once unlocked, shows `RootTabView` and resumes any pending session transcription (`SessionProcessor.runPending()`).
+- `Views/EntryListView.swift` — defines `RootTabView`, the two-tab shell (Journal · Sessions).
+- **Two `@Model`s:** `Models/JournalEntry.swift` (typed: `createdAt`/`title`/`text` + `displayTitle`) and `Models/TherapySession.swift` (below). Both must stay registered in `LilacApp`'s container.
+- `Theme.swift` — color tokens (the lavender `home*` palette used everywhere; plus legacy `Color.lilac`).
+- `Auth/` + `Views/Auth/` — account creation, passcode/biometric app lock (`AuthManager`, `Keychain`, native Sign in with Apple, optional Google). Protects sensitive content.
 
-### The Rewind activity (`Sources/Rewind/` + `Sources/Views/Rewind/`)
+### Journal (`Views/Journal/`)
 
-An AI-integrated "Activities" feature that resurfaces past entries to help users see change over time (NOT nostalgia/"on this day"). Since Lilac is a **local iOS app** (no backend/SQL/REST/auth), the spec's tables → SwiftData `@Model`s, the cron job → `RewindEngine.run()` on launch, and the REST endpoints → `RewindEngine` methods.
+- `JournalListView` — reverse-chronological list of typed entries; compose button; settings behind the gear.
+- `JournalEntryView` — the typed editor (title + `TextEditor` body). Edits write straight into the `@Model`, so SwiftData autosaves — no explicit save action.
 
-- **Models:** `RewindCandidate`, `RewindSession`, `RewindSettings`, `AICallLog` (`RewindModels.swift`); enums in `RewindEnums.swift`. `JournalEntry` gained `themeTags`/`salience`/`crisisFlagged`/`classifiedAt` and a `linkedEntry` relationship (all optional/relationship — migration-safe). **All new `@Model`s must be registered in `LilacApp`'s `ModelContainer`.**
-- **`RewindSelector`** — the single, pure, Foundation-only guardrail chokepoint: enforces `off`/disabled, crisis exclusion, muted-theme exclusion, 30-day recency, and frequency cadence. **This is what the tests target** (`Tests/RewindSelectorTests.swift`) — the guardrails live here, never in the UI.
-- **`RewindEngine`** (`@MainActor`) — classifies pending entries (tagging + safety via `RewindAI`/DeepSeek), scores/maintains candidates, and exposes `next`/`markShown`/`record`/`reflect`/`entries(forTheme:)`/`hardestWeeks`/`bridge`. Safety posture enforced in code: an entry is only eligible once its **safety** classification has run; failures/unreadable entries are never surfaced. `session_echo` is stubbed behind `sessionEchoEnabled = false` (no session data exists).
-- **`RewindAI`** — the two/three narrow DeepSeek calls (crisis classify, per-entry tag+salience, bridge sentence); all fail gracefully. Every call is written to `AICallLog` for auditability.
-- **Text problem:** entries are handwritten ink, so `JournalEntry.classifiableText()` assembles prompt + typed/transcribed text + recognized handwriting (`HandwritingTextExtractor`). Two backends: **Google ML Kit Digital Ink** (stroke-based, on-device, preferred — `MLKitHandwritingRecognizer`, guarded by `#if canImport`) when the `GoogleMLKit/DigitalInkRecognition` pod is installed (see `Podfile`), else **Apple Vision** OCR (image-based, weaker, zero-dependency). ML Kit is far more accurate on real handwriting; Vision keeps the app building without CocoaPods. Recognition is on-device, but the downstream DeepSeek classify/bridge calls still send the resulting text off-device.
-- **Persisted transcript (`Sources/Transcription/`):** every handwritten writing entry (`format == nil`) carries a stored `transcript` (+ `transcriptGeneratedAt`/`transcriptByteCount` staleness signature). `TranscriptionEngine` (`@MainActor`) recognizes ink on-device via `HandwritingTextExtractor` and writes it back — on launch (`LilacApp` `.task`, before Rewind/Insights), when the writing page closes (`JournalPage.onDisappear`), and on demand from the user-facing `TranscriptView` (opened via the transcript button on `JournalPage`). `classifiableText()` and `searchHaystack` prefer this stored transcript and only re-recognize when it's missing/stale (`hasFreshTranscript`), so Search + all AI tools read real words without re-OCRing.
-- **Views** (`Sources/Views/Rewind/`): `RewindCard`, `ThenNowView`, `ThreadRevisitBrowser` (incl. confirmation-gated "hardest weeks"), `RewindSettingsPanel`; `RewindActivitySection` is embedded in `EntryListView`'s "Activities" section. Uses the lilac home-screen palette.
-- **Privacy:** Rewind (and its DeepSeek calls) sends entry text off-device; gated on `RewindSettings.enabled` (defaults on).
+### Sessions — therapist-session assistant (`Sources/Sessions/` + `Sources/Views/Sessions/`)
 
-### The Sessions feature — therapist-session assistant (`Sources/Sessions/` + `Sources/Views/Sessions/`)
+- **Model:** `TherapySession` — covers a **scheduled** future session (calendar) and a **recorded** one. Audio lives **on disk** (`SessionAudioStore`, Application Support) since sessions run long; the model keeps only `audioFilename`. Diarized utterances (`SessionSegment`), the per-session Q&A (`SessionChatMessage`), and lifecycle (`SessionState`: scheduled/transcribing/ready/failed) are JSON-encoded properties.
+- **`DiarizationClient`** — cloud speaker-diarization via **AssemblyAI** (upload → `speaker_labels` → poll → utterances). Optional: `ASSEMBLYAI_API_KEY` (env → Info.plist via `project.yml`); without it, falls back to the on-device `SpeechTranscriber` (flat, unlabeled — and `SFSpeechRecognizer` won't handle a long session, so the key is effectively required for real use). **Sends session audio off-device.**
+- **`SessionProcessor`** (`@MainActor`) — record → transcribe (diarize, else on-device) → summarize. Static `inFlight` set prevents double-processing; requests speech authorization before the on-device fallback. Triggered after recording, from the detail screen's `.task`, and on launch via `runPending()`.
+- **`SessionAI`** — summary + grounded Q&A through the shared `DeepSeekClient` (`Sources/Prompts/DeepSeekClient.swift`, `deepseek-chat`, `DEEPSEEK_API_KEY`); fails gracefully.
+- **Audio (`Sources/Audio/`):** `AudioRecorder`, `AudioPlayer` (on-disk file playback via `play(url:id:)`), `SpeechTranscriber` (on-device fallback).
+- **Views:** `SessionsView` (upcoming calendar strip · recorded list · a `GlowOrbView` record orb docked at the bottom), `SessionRecordView`, `SessionScheduleForm`, `SessionDetailView` (playback, speaker-labeled transcript with a swap toggle, summary, Q&A).
 
-The **Sessions** tab (was a companion+meetings hub) is a recorder/recall tool for therapy sessions: record → diarized transcript (who said what) → AI summary → transcript-grounded Q&A. `EntryListView`'s `.sessions` tab now shows `SessionsView`.
+## Design system (lavender)
 
-- **Model:** `TherapySession` (`Models/TherapySession.swift`) — one `@Model` covering both a **scheduled** future session (calendar) and a **recorded** one. Audio is stored **on disk** (`SessionAudioStore`, Application Support) not inline — sessions run long; the model keeps only `audioFilename`. Diarized utterances (`SessionSegment`), the per-session Q&A (`SessionChatMessage`), and lifecycle (`SessionState`: scheduled/transcribing/ready/failed) are JSON-encoded properties. **Registered in `LilacApp`'s container.**
-- **`DiarizationClient`** — cloud speaker-diarization via **AssemblyAI** (upload → request `speaker_labels` → poll → utterances). Optional like ML Kit/Google Sign-In: `ASSEMBLYAI_API_KEY` (env → Info.plist via `project.yml`); without it, `isConfigured == false` and processing falls back to the on-device `SpeechTranscriber` (flat, unlabeled text). **This sends session audio off-device** — the record screen says so.
-- **`SessionProcessor`** (`@MainActor`) — record → transcribe (diarize, else on-device) → summarize, writing results back. A static `inFlight` set prevents double-processing. Triggered after recording, from the detail screen's `.task`, and resumed on launch via `runPending()` (added to `LilacApp` after Rewind).
-- **`SessionAI`** — summary + grounded Q&A through the shared `DeepSeekClient`; fails gracefully.
-- **Views:** `SessionsView` (calendar strip of upcoming ↑ · recorded list · bottom dock with the AI-companion chatbox + a `GlowOrbView` record orb), `SessionRecordView` (mic + timer), `SessionScheduleForm` (calendar side), `SessionDetailView` (audio playback via `AudioPlayer.play(url:id:)`, speaker-labeled transcript with a swap toggle, summary, Q&A). Uses the home lavender palette.
-- **Recall:** `CompanionView` folds the most recent session summaries into its grounding, so the companion can draw on what was worked through in therapy.
-- `Views/Meetings/MeetingsView.swift` was deleted (superseded by this feature). The old `Meeting` model is now unused but stays registered in the container to avoid a migration.
+Soft lavender palette in `Theme.swift` — `home*` tokens (`homeAccent`, `homeCard` white, `homeTint`, `homeHairline`, `homeBackgroundTop/Bottom`, etc.). Serif (New York) for headings/journal text. `homeCardBackground()` (in `Views/Home/HomeExtras.swift`) is the standard white card. Pull from these tokens rather than inventing colors.
 
-### The reusable journaling engine (`Sources/Journal/`)
+### Key conventions
 
-This is the modular base every journaling type builds on — keep type-specific logic **out** of it.
-
-- `Journal/JournalPage.swift` — `JournalPage<Accessory: View>`, the whole writing surface: header (editable `entry.title` + full date) → optional `accessory` slot → ruled page + canvas → spacing slider. A trailing toolbar carries a transcript button and a **checkmark ("Done writing")** that dismisses; the pushed nav stack supplies the back button. The **extension points** are the two initializer parameters:
-  - `accessory:` — a `@ViewBuilder` slot rendered under the date. A prompted mode passes a prompt banner here; the free diary passes nothing (defaults to `EmptyView`).
-  - `theme:` — a `JournalTheme` (defaults to `.clean`: white paper, grey rules) so a mode can restyle paper/ink/rules/spacing without touching the page.
-  - Line spacing is local `@State` seeded from `theme.defaultSpacing`; it is **not** persisted per entry yet.
-- `Journal/JournalTheme.swift` — `JournalTheme` value type bundling `paper`/`ink`/`rule`/`margin` colors + `spacingRange`/`defaultSpacing`. `.clean` (white/grey) is the writing-page default; `.diary` (warm aged paper) remains for the sketch formats. Add a new `static let` here to define a new mode's look.
-- `Journal/RuledPaper.swift` — draws the faint rules + left margin with SwiftUI `Canvas`, parameterized by `spacing` and colors. Purely decorative (`allowsHitTesting(false)`).
-- `Journal/DrawingCanvas.swift` — `UIViewRepresentable` wrapper over `PKCanvasView` for the **writing** page: fixed fountain-pen ink (color passed in), no floating tool picker, hosts the ruled background inside its scroll content, auto-grows.
-- `Journal/SketchCanvas.swift` — the free-drawing counterpart for the **drawing/diagram** formats: shows the full `PKToolPicker` (pens, eraser, colors), scrolls + auto-grows, and renders an optional dot grid (`GridBackgroundView`) behind the ink. Used by `Views/DrawingJournalView.swift` (blank paper for `.drawing`, dot grid for `.diagram`). Persistence is identical to writing — the drawing is `entry.drawingData`, autosaved via `onChange`; `updateUIView` never writes `canvas.drawing`.
-- `Journal/RuledBackgroundView.swift` / `Journal/GridBackgroundView.swift` — non-interactive UIKit backgrounds (ruled lines / dot grid) drawn inside the respective canvas's scroll content so they stay locked to the ink.
-
-`Models/JournalFormat.swift` enumerates the non-writing formats surfaced in the home-screen "Create" gallery (`Views/CreateJournalView.swift`), with an `isAvailable` flag. Live formats are `.drawing`/`.diagram` (→ `DrawingJournalView`), `.photo` (→ `Views/PictureJournalView.swift`, a drag/pinch photo collage), and `.audio` (→ `Views/AudioJournalView.swift`), routed via `JournalEntry.format`; only `.log` still presents `ComingSoonEditor`. Photos persist on the entry: `backgroundImageData` (a single annotate-over photo behind the ink in a drawing/diagram — see `SketchCanvas.backgroundImage`) and `collageData` (JSON-encoded `[CollageItem]`, exposed via `JournalEntry.collageItems`). Imported photos are downscaled + JPEG-encoded via `UIImage.journalEncoded` (`Journal/PhotoSupport.swift`).
-
-Audio journaling (`Sources/Audio/`): `AudioRecorder` records a voice note to a temp `.m4a`, `SpeechTranscriber` turns it into text (prefers on-device recognition), `AudioPlayer` plays clips back. `AudioJournalView` records → optionally transcribes into `entry.text` → keeps the audio as `entry.audioClips` (JSON-encoded `[AudioClip]`) → lets the writer keep typing in a `TextEditor`. Mic + speech usage strings are wired in `project.yml` (`NSMicrophoneUsageDescription`, `NSSpeechRecognitionUsageDescription`).
-
-## Design system (diary aesthetic)
-
-The look is a **warm, deliberate aged-paper diary** — serif type, no tech/AI/startup colors or vocabulary. Preserve this direction; when adding UI, pull from the tokens rather than inventing new colors or fonts.
-
-- **Color** (`Theme.swift`): `paper` warm ivory `#F6EFE0` (the page), `ink` warm near-black `#332B24` (writing + primary text), `rule` faint sepia (ruled lines/hairlines), `margin` dried lilac (left margin + accent/slider tint — ties to the app name while staying warm). Route new surfaces through a `JournalTheme` instead of hardcoding.
-- **Type:** system **serif** (New York) for all chrome — `.font(.system(.largeTitle, design: .serif))` for the hero weekday, italic serif for the date line. Keep serif; avoid the default SF sans for user-facing journal text.
-- **Layout:** date anchored top-left as the page's hero; quiet controls docked behind hairline (`rule`) dividers; generous padding (24pt horizontal). Chrome stays understated so the page reads as paper, not an editor.
-
-### Key conventions worth preserving
-
-- **Autosave via closure, not binding.** `DrawingCanvas` reports strokes through an `onChange: (PKDrawing) -> Void` callback; the editor writes the encoded data straight into the `@Model`, so SwiftData persists every stroke. There is no explicit "save" action.
-- **`DrawingCanvas.updateUIView` is deliberately empty.** Never push the SwiftUI drawing state back into the live `PKCanvasView` — it would clobber in-progress strokes. The initial drawing is set once in `makeUIView`.
-- **`drawingPolicy = .anyInput`** so the canvas works with finger/pointer in the Simulator, not just Apple Pencil.
-- Drawings are the source of truth for entry content; when reading/rendering an entry, decode `drawingData` with `try? PKDrawing(data:)` and treat an empty/failed decode as a blank `PKDrawing()`.
+- **Autosave via the model, not a save button.** Editors bind to the `@Model`; SwiftData persists changes.
+- **New `@Model`s must be registered** in `LilacApp`'s `ModelContainer`.
+- **Immediate next step (the actual product wedge):** wire the journal to the session data — therapy-aware prompts ("last session you worked on X; did it come up?") and links between entries and sessions. That integration is the moat; the plain journal alone is a commodity.
