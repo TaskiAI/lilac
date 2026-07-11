@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & test
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      # The .xcodeproj is a build artifact generated from project.yml.
+      - name: Generate project
+        run: xcodegen generate
+
+      # Build for a generic simulator so no code signing or provisioning is
+      # required (the app's optional CocoaPods — ML Kit, Google Sign-In — and the
+      # DeepSeek/AssemblyAI keys are all absent here; the app builds without them).
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Lilac.xcodeproj \
+            -scheme Lilac \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO
+
+      # Pick whichever iPhone simulator the runner actually has, so tests don't
+      # break when GitHub bumps the default device set.
+      - name: Choose a simulator
+        id: sim
+        run: |
+          DEVICE=$(xcrun simctl list devices available \
+            | grep -Eo 'iPhone [0-9]+( Pro)?( Max)?' | head -1)
+          echo "device=${DEVICE:-iPhone 16}" >> "$GITHUB_OUTPUT"
+
+      - name: Test
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Lilac.xcodeproj \
+            -scheme Lilac \
+            -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.device }}" \
+            CODE_SIGNING_ALLOWED=NO
