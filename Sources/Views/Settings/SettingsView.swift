@@ -8,12 +8,14 @@ struct SettingsView: View {
 
     @State private var sheet: SettingsSheet?
     @State private var showResetConfirm = false
+    @State private var showingCrisis = false
 
     var body: some View {
         NavigationStack {
             List {
                 profileSection
                 securitySection
+                helpSection
                 aboutSection
                 accountSection
             }
@@ -38,6 +40,7 @@ struct SettingsView: View {
                     PasscodeFlowSheet(mode: mode).environmentObject(auth)
                 }
             }
+            .sheet(isPresented: $showingCrisis) { CrisisResourcesView() }
             .confirmationDialog(
                 "Reset account?",
                 isPresented: $showResetConfirm,
@@ -53,6 +56,17 @@ struct SettingsView: View {
     }
 
     // MARK: Sections
+
+    private var helpSection: some View {
+        Section {
+            Button { showingCrisis = true } label: {
+                Label("Get help now", systemImage: "lifepreserver")
+            }
+            .tint(.homeAccent)
+        } footer: {
+            Text("Crisis resources. Lilac isn't a crisis service.")
+        }
+    }
 
     private var profileSection: some View {
         Section {

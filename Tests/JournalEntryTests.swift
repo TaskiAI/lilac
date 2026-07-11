@@ -12,8 +12,17 @@ final class JournalEntryTests: XCTestCase {
         XCTAssertEqual(entry.displayTitle, "First line")
     }
 
+    func testDisplayTitleFallsBackToPrompt() {
+        let entry = JournalEntry(text: "", prompt: "What came up this week?")
+        XCTAssertEqual(entry.displayTitle, "What came up this week?")
+    }
+
     func testDisplayTitleIsUntitledWhenBlank() {
         let entry = JournalEntry(title: "   ", text: "   ")
         XCTAssertEqual(entry.displayTitle, "Untitled")
+    }
+
+    func testGenericReflectionPromptIsNonEmpty() {
+        XCTAssertFalse(JournalAI.genericPrompt().isEmpty)
     }
 }

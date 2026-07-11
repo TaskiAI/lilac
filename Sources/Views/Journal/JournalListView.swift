@@ -1,28 +1,55 @@
 import SwiftUI
 import SwiftData
 
-/// The Journal tab: a reverse-chronological list of typed entries. Tap one to
-/// edit, or the compose button to start a new one. Settings live behind the
-/// gear.
+/// The Journal tab: a reverse-chronological list of typed entries, with a
+/// therapy-aware nudge to reflect on your most recent session at the top. Tap an
+/// entry to edit, or compose a blank one. Settings live behind the gear.
 struct JournalListView: View {
     @Environment(\.modelContext) private var context
     @EnvironmentObject private var auth: AuthManager
     @Query(sort: \JournalEntry.createdAt, order: .reverse) private var entries: [JournalEntry]
+    @Query(sort: \TherapySession.date, order: .reverse) private var sessions: [TherapySession]
 
     @State private var path: [JournalEntry] = []
     @State private var showingSettings = false
+    @State private var generating = false
+
+    private let journalAI = JournalAI()
+
+    /// The most recent recorded, summarized session that hasn't been reflected on yet.
+    private var sessionToReflect: TherapySession? {
+        sessions.first { session in
+            session.hasRecording
+                && session.state == .ready
+                && (session.summary?.isEmpty == false)
+                && !entries.contains { $0.linkedSession?.persistentModelID == session.persistentModelID }
+        }
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
             Group {
-                if entries.isEmpty {
+                if entries.isEmpty && sessionToReflect == nil {
                     emptyState
                 } else {
                     List {
-                        ForEach(entries) { entry in
-                            NavigationLink(value: entry) { EntryRow(entry: entry) }
+                        if let session = sessionToReflect {
+                            Section {
+                                ReflectCard(session: session, generating: generating) {
+                                    reflect(on: session)
+                                }
+                                .listRowInsets(EdgeInsets())
+                                .listRowBackground(Color.clear)
+                            }
                         }
-                        .onDelete(perform: delete)
+                        if !entries.isEmpty {
+                            Section("Entries") {
+                                ForEach(entries) { entry in
+                                    NavigationLink(value: entry) { EntryRow(entry: entry) }
+                                }
+                                .onDelete(perform: delete)
+                            }
+                        }
                     }
                     .listStyle(.insetGrouped)
                     .scrollContentBackground(.hidden)
@@ -84,10 +111,25 @@ struct JournalListView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    // MARK: Actions
+
     private func newEntry() {
         let entry = JournalEntry()
         context.insert(entry)
         path.append(entry)
+    }
+
+    /// Generate a therapy-aware prompt for the session, create a linked entry, open it.
+    private func reflect(on session: TherapySession) {
+        guard !generating else { return }
+        generating = true
+        Task { @MainActor in
+            let prompt = await journalAI.reflectionPrompt(for: session)
+            let entry = JournalEntry(prompt: prompt, linkedSession: session)
+            context.insert(entry)
+            generating = false
+            path.append(entry)
+        }
     }
 
     private func delete(at offsets: IndexSet) {
@@ -95,18 +137,67 @@ struct JournalListView: View {
     }
 }
 
+// MARK: - Reflect card
+
+private struct ReflectCard: View {
+    let session: TherapySession
+    let generating: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle().fill(Color.homeTint).frame(width: 44, height: 44)
+                    Image(systemName: "sparkles").foregroundStyle(Color.homeAccent)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Reflect on your last session")
+                        .font(.system(.subheadline, design: .serif).weight(.medium))
+                        .foregroundStyle(Color.homeHeading)
+                    Text(session.date.formatted(date: .abbreviated, time: .omitted))
+                        .font(.caption)
+                        .foregroundStyle(Color.homeSecondary)
+                }
+                Spacer(minLength: 4)
+                if generating {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.homeSecondary.opacity(0.5))
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity)
+            .homeCardBackground()
+        }
+        .buttonStyle(.plain)
+        .disabled(generating)
+        .padding(.vertical, 4)
+    }
+}
+
 private struct EntryRow: View {
     let entry: JournalEntry
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(entry.displayTitle)
-                .font(.system(.body, design: .serif).weight(.medium))
-                .foregroundStyle(Color.homeHeading)
-                .lineLimit(1)
-            Text(entry.createdAt.formatted(date: .abbreviated, time: .shortened))
-                .font(.caption)
-                .foregroundStyle(Color.homeSecondary)
+        HStack(spacing: 10) {
+            if entry.linkedSession != nil {
+                Image(systemName: "waveform")
+                    .font(.caption)
+                    .foregroundStyle(Color.homeAccent)
+                    .frame(width: 16)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(entry.displayTitle)
+                    .font(.system(.body, design: .serif).weight(.medium))
+                    .foregroundStyle(Color.homeHeading)
+                    .lineLimit(1)
+                Text(entry.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.caption)
+                    .foregroundStyle(Color.homeSecondary)
+            }
         }
         .padding(.vertical, 4)
     }

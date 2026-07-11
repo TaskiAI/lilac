@@ -12,11 +12,14 @@ struct SessionRecordView: View {
     /// An existing scheduled session being recorded into, if any.
     var scheduled: TherapySession? = nil
 
+    @AppStorage("recordingConsentAcknowledged") private var consentAcknowledged = false
+
     @State private var recorder = AudioRecorder()
     @State private var title = ""
     @State private var therapist = ""
     @State private var recording: (data: Data, duration: TimeInterval)?
     @State private var permissionDenied = false
+    @State private var showingConsent = false
 
     private var hasRecording: Bool { recording != nil }
 
@@ -61,6 +64,13 @@ struct SessionRecordView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text("Enable microphone access in Settings to record a session.")
+            }
+            .sheet(isPresented: $showingConsent) {
+                RecordingConsentView {
+                    consentAcknowledged = true
+                    showingConsent = false
+                    beginRecording()
+                }
             }
         }
         .tint(.homeAccent)
@@ -148,15 +158,23 @@ struct SessionRecordView: View {
                     try? FileManager.default.removeItem(at: url)
                 }
             }
+        } else if !consentAcknowledged {
+            // First recording: confirm the person understands consent + off-device
+            // transcription before capturing anyone's voice.
+            showingConsent = true
         } else {
-            Task { @MainActor in
-                guard await recorder.requestPermission() else {
-                    permissionDenied = true
-                    return
-                }
-                recording = nil
-                try? recorder.start()
+            beginRecording()
+        }
+    }
+
+    private func beginRecording() {
+        Task { @MainActor in
+            guard await recorder.requestPermission() else {
+                permissionDenied = true
+                return
             }
+            recording = nil
+            try? recorder.start()
         }
     }
 
@@ -213,6 +231,81 @@ private struct LabeledField: View {
                         .fill(Color.homeCard)
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.homeHairline, lineWidth: 1))
                 )
+        }
+    }
+}
+
+/// A one-time acknowledgement shown before the first recording: recording another
+/// person's voice needs their consent, and audio is sent off-device to transcribe.
+private struct RecordingConsentView: View {
+    let onAccept: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    ZStack {
+                        Circle().fill(Color.homeTint).frame(width: 72, height: 72)
+                        Image(systemName: "lock.shield")
+                            .font(.system(size: 30))
+                            .foregroundStyle(Color.homeAccent)
+                    }
+                    .frame(maxWidth: .infinity)
+
+                    Text("Before you record")
+                        .font(.system(.title2, design: .serif).weight(.semibold))
+                        .foregroundStyle(Color.homeAccentDeep)
+
+                    point("Get consent", "You're recording another person's voice. Make sure your therapist knows and agrees before you record.")
+                    point("Audio leaves your device", "Recordings are sent to a transcription service to create the transcript and summary. Your typed journal stays on your device.")
+                    point("It's yours to delete", "You can delete a session and its recording at any time.")
+                }
+                .padding(24)
+            }
+            .background(
+                LinearGradient(colors: [.homeBackgroundTop, .homeBackgroundBottom],
+                               startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+            )
+            .navigationTitle("Recording")
+            .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 10) {
+                    Button(action: onAccept) {
+                        Text("I understand — continue")
+                            .font(.system(.headline, design: .serif))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Capsule().fill(Color.homeAccent))
+                    }
+                    .buttonStyle(.plain)
+                    Button("Not now") { dismiss() }
+                        .font(.subheadline)
+                        .foregroundStyle(Color.homeSecondary)
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 8)
+                .background(.ultraThinMaterial)
+            }
+        }
+        .tint(.homeAccent)
+    }
+
+    private func point(_ title: String, _ body: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(Color.homeAccent)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.homeHeading)
+                Text(body)
+                    .font(.footnote)
+                    .foregroundStyle(Color.homeSecondary)
+            }
         }
     }
 }

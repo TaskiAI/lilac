@@ -10,13 +10,23 @@ struct SessionDetailView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
 
+    @Query(sort: \JournalEntry.createdAt, order: .reverse) private var allEntries: [JournalEntry]
+
     @State private var player = AudioPlayer()
     @State private var draft = ""
     @State private var isThinking = false
     @State private var isSummarizing = false
+    @State private var generatingReflection = false
+    @State private var reflectionEntry: JournalEntry?
     @FocusState private var inputFocused: Bool
 
     private let ai = SessionAI()
+    private let journalAI = JournalAI()
+
+    /// Journal entries written in reflection on this session, newest first.
+    private var reflections: [JournalEntry] {
+        allEntries.filter { $0.linkedSession?.persistentModelID == session.persistentModelID }
+    }
 
     var body: some View {
         ScrollView {
@@ -24,6 +34,7 @@ struct SessionDetailView: View {
                 header
                 audioPlayer
                 summarySection
+                reflectionSection
                 transcriptSection
                 qaSection
             }
@@ -65,7 +76,82 @@ struct SessionDetailView: View {
         }
         .task { await SessionProcessor(context: context).processIfNeeded(session) }
         .onDisappear { player.stop() }
+        .sheet(item: $reflectionEntry) { entry in
+            NavigationStack { JournalEntryView(entry: entry, showsDone: true) }
+        }
         .tint(.homeAccent)
+    }
+
+    // MARK: Reflection
+
+    @ViewBuilder
+    private var reflectionSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Reflect", systemImage: "book")
+                    .font(.system(.headline, design: .serif))
+                    .foregroundStyle(Color.homeHeading)
+                Spacer()
+            }
+
+            Text("Journal on what came up — grounded in this session.")
+                .font(.caption)
+                .foregroundStyle(Color.homeSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            ForEach(reflections) { entry in
+                Button { reflectionEntry = entry } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "text.alignleft")
+                            .font(.caption)
+                            .foregroundStyle(Color.homeAccent)
+                        Text(entry.displayTitle)
+                            .font(.system(.subheadline, design: .serif))
+                            .foregroundStyle(Color.homeAccentDeep)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        Text(entry.createdAt.formatted(date: .abbreviated, time: .omitted))
+                            .font(.caption2)
+                            .foregroundStyle(Color.homeSecondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Button(action: writeReflection) {
+                HStack(spacing: 8) {
+                    if generatingReflection {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "square.and.pencil")
+                    }
+                    Text(reflections.isEmpty ? "Write a reflection" : "Write another")
+                        .font(.system(.subheadline, design: .serif).weight(.medium))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(Capsule().fill(Color.homeAccent))
+            }
+            .buttonStyle(.plain)
+            .disabled(generatingReflection)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity)
+        .homeCardBackground()
+    }
+
+    private func writeReflection() {
+        guard !generatingReflection else { return }
+        generatingReflection = true
+        Task { @MainActor in
+            let prompt = await journalAI.reflectionPrompt(for: session)
+            let entry = JournalEntry(prompt: prompt, linkedSession: session)
+            context.insert(entry)
+            generatingReflection = false
+            reflectionEntry = entry
+        }
     }
 
     // MARK: Header
